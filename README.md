@@ -120,5 +120,3 @@ This is a personal tool shared publicly. Contributions are welcome, with realist
 - **Bugs** - Addressed based on severity and personal availability
 - **Pull requests** - Please open an issue first to discuss it before submitting a pull request.
 - **Feature requests** - May not align with my needs. Fork and customize as needed.
-
-See [IDEAS.md](IDEAS.md) for potential future features.
