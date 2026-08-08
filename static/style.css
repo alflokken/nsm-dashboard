@@ -1,0 +1,430 @@
+:root {
+    --color-easy: #43a047;
+    --color-easy-hover: #3d9141;
+    --color-long: #1b5e20;
+    --color-long-hover: #145218;
+    --color-interval: #f57c00;
+    --color-interval-hover: #e56800;
+    --color-empty: #f8f9fb;
+    --color-border: #e8eaed;
+    --color-border-subtle: #f0f1f3;
+    --color-current-week: #f8fbff;
+    --color-current-accent: #4a90d9;
+    --text-primary: #1a1a1a;
+    --text-secondary: #5f6368;
+    --radius-card: 6px;
+    --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.12);
+}
+
+body {
+    background: #f0f1f4;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Layout container */
+.app-container {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 0.75rem;
+}
+
+/* Header */
+.app-header {
+    background: #fff;
+    border-bottom: 1px solid var(--color-border);
+    padding: 0.6rem 1rem;
+    margin-bottom: 0;
+}
+
+.app-title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--text-primary);
+}
+
+.sync-meta {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+/* Table */
+.table-wrapper {
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    margin: 0.75rem;
+    overflow: auto;
+    max-height: calc(100vh - 80px);
+}
+
+.week-table {
+    table-layout: fixed;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.week-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+}
+
+.week-table thead th {
+    background: #f6f7f9;
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    padding: 0.5rem 0.4rem;
+    border-bottom: 1px solid var(--color-border);
+    border-top: none;
+    white-space: nowrap;
+}
+
+.week-table tbody td {
+    vertical-align: top;
+    padding: 0.35rem;
+    min-width: 100px;
+    min-height: 78px;
+    height: 78px;
+    border-color: var(--color-border-subtle);
+    border-bottom: 1px solid var(--color-border-subtle);
+    transition: background 0.1s;
+}
+
+.week-table tbody tr:hover td {
+    background: #fcfcfd;
+}
+
+/* Sticky week column */
+.week-table th:first-child,
+.week-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 10;
+    background: #f6f7f9;
+}
+
+.week-table tbody td:first-child {
+    background: #fafbfc;
+}
+
+/* Sticky totals column */
+.week-table th:last-child,
+.week-table td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 10;
+    background: #f6f7f9;
+}
+
+.week-table tbody td:last-child {
+    background: #fafbfc;
+}
+
+/* Workout cards */
+.workout-card {
+    display: block;
+    padding: 0.4rem 0.55rem;
+    border-radius: var(--radius-card);
+    color: #fff;
+    text-decoration: none;
+    font-size: 0.72rem;
+    line-height: 1.35;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.12s ease;
+    border: none;
+    outline: none;
+}
+
+.workout-card:hover {
+    color: #fff;
+    text-decoration: none;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-card-hover);
+}
+
+.workout-card:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: -2px;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.2);
+}
+
+.workout-card.easy { background: var(--color-easy); }
+.workout-card.easy:hover { background: var(--color-easy-hover); }
+.workout-card.long { background: var(--color-long); }
+.workout-card.long:hover { background: var(--color-long-hover); }
+.workout-card.interval { background: var(--color-interval); }
+.workout-card.interval:hover { background: var(--color-interval-hover); }
+
+.workout-card + .workout-card {
+    margin-top: 3px;
+}
+
+.workout-card .title {
+    font-weight: 700;
+    font-size: 0.72rem;
+    margin-bottom: 1px;
+}
+
+.workout-card .details {
+    opacity: 0.82;
+    font-size: 0.6rem;
+    white-space: nowrap;
+}
+
+/* Empty day cells */
+.day-empty {
+    height: 100%;
+}
+
+/* Current week highlight */
+.week-current td {
+    background: var(--color-current-week) !important;
+}
+
+.week-current td:first-child {
+    border-left: 3px solid var(--color-current-accent);
+    background: #f0f6ff !important;
+}
+
+/* Totals cell */
+.totals-cell {
+    font-size: 0.72rem;
+    line-height: 1.6;
+    vertical-align: middle !important;
+    text-align: center;
+    padding: 0.4rem 0.6rem !important;
+}
+
+.totals-primary {
+    font-weight: 700;
+    font-size: 0.74rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    display: block;
+}
+
+.totals-secondary {
+    font-size: 0.62rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+    white-space: nowrap;
+    display: block;
+}
+
+/* Week label */
+.week-label {
+    font-size: 0.68rem;
+    text-align: center;
+    vertical-align: middle !important;
+    font-weight: 600;
+    color: var(--text-secondary);
+    width: 54px !important;
+    padding: 0.3rem !important;
+}
+
+.week-label-current {
+    color: var(--color-current-accent);
+    font-weight: 700;
+}
+
+.today-cell {
+    border-top: 2px solid var(--color-current-accent) !important;
+}
+
+.today-tag {
+    float: right;
+    font-size: 0.42rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    background: rgba(255,255,255,0.15);
+    padding: 1px 4px;
+    border-radius: 3px;
+    line-height: 1.2;
+    margin-left: 4px;
+}
+
+.today-tag-empty {
+    text-align: center;
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #999;
+    padding-top: 6px;
+}
+
+.year-hint {
+    font-size: 0.58rem;
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+/* Year divider row */
+.year-divider td {
+    background: var(--color-empty) !important;
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    padding: 0.25rem !important;
+    height: auto !important;
+    min-height: 0 !important;
+    border-color: var(--color-border);
+    letter-spacing: 0.05em;
+}
+
+[data-theme="dark"] .year-divider td {
+    background: #1e2126 !important;
+}
+
+/* Load more button */
+.load-more-btn {
+    font-size: 0.72rem;
+}
+
+.load-more-meta {
+    font-size: 0.68rem;
+    color: #6c757d;
+}
+
+[data-theme="dark"] .load-more-meta {
+    color: #adb5bd;
+}
+
+/* Refresh button */
+#refresh-btn {
+    font-size: 0.72rem;
+    font-weight: 500;
+    padding: 0.3rem 0.7rem;
+    border-radius: 5px;
+    transition: all 0.12s;
+}
+
+#refresh-btn .spinner-border {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-width: 0.13em;
+}
+
+#refresh-btn:disabled {
+    opacity: 0.6;
+}
+
+/* Sync error indicator */
+.sync-error {
+    color: #d32f2f;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: default;
+}
+
+/* Theme toggle */
+.theme-toggle {
+    font-size: 0.82rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 5px;
+    line-height: 1;
+}
+
+/* Dark mode */
+[data-theme="dark"] {
+    --color-empty: #1e2128;
+    --color-border: #2d3139;
+    --color-border-subtle: #252830;
+    --color-current-week: #1a2233;
+    --color-current-accent: #5b9fe0;
+    --text-primary: #e1e3e6;
+    --text-secondary: #8b8f96;
+    --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+[data-theme="dark"] body {
+    background: #111315;
+}
+
+[data-theme="dark"] .app-header {
+    background: #1a1d21;
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .table-wrapper {
+    background: #1a1d21;
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .week-table,
+[data-theme="dark"] .week-table > :not(caption) > * > * {
+    background: #1a1d21;
+    color: var(--text-primary);
+    border-color: var(--color-border-subtle);
+}
+
+[data-theme="dark"] .week-table thead th {
+    background: #1e2126;
+    border-color: var(--color-border);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .week-table tbody tr:hover td {
+    background: #1e2128;
+}
+
+[data-theme="dark"] .week-table th:first-child,
+[data-theme="dark"] .week-table td:first-child {
+    background: #1a1d21;
+}
+
+[data-theme="dark"] .week-table tbody td:first-child {
+    background: #1a1d21;
+}
+
+[data-theme="dark"] .week-table th:last-child,
+[data-theme="dark"] .week-table td:last-child {
+    background: #1a1d21;
+}
+
+[data-theme="dark"] .week-table tbody td:last-child {
+    background: #1a1d21;
+}
+
+[data-theme="dark"] .week-current td {
+    background: var(--color-current-week) !important;
+}
+
+[data-theme="dark"] .week-current td:first-child {
+    background: #172035 !important;
+}
+
+[data-theme="dark"] .btn-outline-secondary {
+    color: var(--text-secondary);
+    border-color: var(--color-border);
+}
+
+[data-theme="dark"] .btn-outline-secondary:hover {
+    background: #252830;
+    color: var(--text-primary);
+    border-color: #3d4149;
+}
+
+/* Responsive tweaks */
+@media (max-width: 768px) {
+    .table-wrapper {
+        margin: 0.4rem;
+        border-radius: 4px;
+    }
+    .week-table tbody td {
+        min-width: 90px;
+        height: 68px;
+    }
+}

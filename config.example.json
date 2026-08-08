@@ -1,0 +1,9 @@
+{
+  "api_key": "YOUR_INTERVALS_ICU_API_KEY",
+  "athlete_id": "YOUR_ATHLETE_ID",
+  "activity_types": ["Run", "TrailRun", "VirtualRun"],
+  "weeks_initial_sync": 12,
+  "port": 5000,
+  "db_path": "data/nsm.db",
+  "debug": false
+}
