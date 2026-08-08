@@ -13,7 +13,7 @@ Built with Claude Opus 4.6.
 ### Docker (recommended)
 
 ```bash
-cp config.example.json config.json   # Edit with your API key and athlete ID
+cp config.example.json config.json   # Edit with your API key
 docker compose up -d
 ```
 
@@ -21,7 +21,7 @@ docker compose up -d
 
 ```bash
 pip install -r requirements.txt
-cp config.example.json config.json   # Edit with your API key and athlete ID
+cp config.example.json config.json   # Edit with your API key
 python app.py
 ```
 
@@ -36,7 +36,7 @@ Edit `config.json`:
 | Field | Description | Default |
 | --- | --- | --- |
 | `api_key` | Your Intervals.icu API key, found under Settings → Developer | Required |
-| `athlete_id` | Your athlete ID, for example `i552452` | Required |
+| `athlete_id` | Athlete ID — `0` resolves to the API key owner | `"0"` |
 | `activity_types` | Activity types to include | `["Run", "TrailRun", "VirtualRun"]` |
 | `weeks_initial_sync` | Number of weeks of history to fetch on the first run | `12` (3 months) |
 | `port` | Local server port | `5000` |
