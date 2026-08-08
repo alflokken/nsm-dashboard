@@ -11,7 +11,8 @@ log = logging.getLogger(__name__)
 
 API_BASE = "https://intervals.icu/api/v1"
 FIELDS = "id,start_date_local,type,name,distance,moving_time,elapsed_time,average_heartrate,average_speed,icu_warmup_time,icu_cooldown_time"
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NSM/1.0"
+USER_AGENT = "NSM/1.0"
+_RETRY_STATUSES = {429, 500, 502, 503, 504}
 
 
 def _session(api_key):
@@ -33,16 +34,20 @@ def _fetch_activities(session, athlete_id, oldest, newest=None):
     return resp.json()
 
 
-def _fetch_intervals(session, activity_id):
-    """Fetch intervals and groups for a single activity."""
+def _fetch_intervals(session, activity_id, retries=1):
+    """Fetch intervals and groups for a single activity (with retry)."""
     url = f"{API_BASE}/activity/{activity_id}/intervals"
-    resp = session.get(url, timeout=30)
-    resp.raise_for_status()
-    data = resp.json()
-    return data.get("icu_intervals", []), data.get("icu_groups", [])
+    for attempt in range(retries + 1):
+        resp = session.get(url, timeout=30)
+        if resp.status_code in _RETRY_STATUSES and attempt < retries:
+            time.sleep(1)
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get("icu_intervals", []), data.get("icu_groups", [])
 
 
-def sync_activities(db, config, full=False):
+def sync_activities(db, config: dict, full: bool = False) -> dict:
     """Sync activities from Intervals.icu.
 
     Args:
@@ -54,6 +59,14 @@ def sync_activities(db, config, full=False):
         dict with sync results (count, errors, etc.)
     """
     session = _session(config["api_key"])
+    try:
+        return _sync(db, session, config, full)
+    finally:
+        session.close()
+
+
+def _sync(db, session, config, full):
+    """Internal sync implementation."""
     athlete_id = config["athlete_id"]
     activity_types = set(config["activity_types"])
 
@@ -73,7 +86,7 @@ def sync_activities(db, config, full=False):
     newest = datetime.now().strftime("%Y-%m-%d")
 
     # Fetch activities
-    log.debug("Fetching activities from %s to %s", oldest, newest)
+    log.info("Fetching activities from %s to %s", oldest, newest)
     try:
         activities = _fetch_activities(session, athlete_id, oldest, newest)
     except requests.RequestException as e:
@@ -83,7 +96,7 @@ def sync_activities(db, config, full=False):
     log.debug("Received %d activities, filtering by types: %s", len(activities), activity_types)
     # Filter by type
     activities = [a for a in activities if a.get("type") in activity_types]
-    log.debug("%d activities after type filter", len(activities))
+    log.info("%d activities after type filter", len(activities))
 
     synced = 0
     errors = []
@@ -107,12 +120,12 @@ def sync_activities(db, config, full=False):
             now = datetime.now().isoformat()
             db.execute(
                 """INSERT OR REPLACE INTO activities
-                   (id, start_date_local, type, name, distance, moving_time,
+                    (id, start_date_local, type, name, distance, moving_time,
                     elapsed_time, average_heartrate, average_speed,
                     icu_warmup_time, icu_cooldown_time,
                     classification, display_name, work_interval_time,
                     interval_count, interval_avg_duration, synced_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     activity_id_val,
                     activity.get("start_date_local"),
@@ -134,6 +147,8 @@ def sync_activities(db, config, full=False):
                 ),
             )
             synced += 1
+            if synced % 25 == 0:
+                log.info("  %d/%d processed...", synced, len(activities))
         except Exception as e:
             errors.append(f"{activity_id_val}: {e}")
 

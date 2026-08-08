@@ -6,15 +6,15 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, g, render_template, jsonify, request
 
 from sync import sync_activities
-
-app = Flask(__name__)
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
 SCHEMA_PATH = BASE_DIR / "schema.sql"
+
+log = logging.getLogger(__name__)
 
 
 def load_config():
@@ -31,17 +31,34 @@ def load_config():
         raise SystemExit(f"config.json is not valid JSON: {e}")
 
 
+# Load config and schema once at startup
+CONFIG = load_config()
+_DB_PATH = BASE_DIR / CONFIG.get("db_path", "nsm.db")
+_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+app = Flask(__name__)
+
+# Apply schema once at startup
+_init_db = sqlite3.connect(str(_DB_PATH))
+with open(SCHEMA_PATH) as f:
+    _init_db.executescript(f.read())
+_init_db.close()
+
+
 def get_db():
-    """Get a database connection, creating the DB if needed."""
-    config = load_config()
-    db_path = BASE_DIR / config.get("db_path", "nsm.db")
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(str(db_path))
-    db.row_factory = sqlite3.Row
-    # Apply schema on every connect (IF NOT EXISTS makes this safe)
-    with open(SCHEMA_PATH) as f:
-        db.executescript(f.read())
-    return db
+    """Get a database connection for the current request (cached on g)."""
+    if "db" not in g:
+        g.db = sqlite3.connect(str(_DB_PATH))
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exc):
+    """Close the DB connection at the end of each request."""
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
 
 def get_weeks_data(db, num_weeks=20):
@@ -109,6 +126,12 @@ def format_pace(average_speed):
     return f"{mins}:{secs:02d}"
 
 
+@app.template_filter("pace")
+def pace_filter(average_speed):
+    """Jinja2 filter: {{ speed | pace }}."""
+    return format_pace(average_speed)
+
+
 def current_iso_week():
     """Return (year, week) for today."""
     iso = datetime.now().isocalendar()
@@ -134,7 +157,6 @@ def index():
         except (ValueError, TypeError):
             last_sync = row[0]
 
-    db.close()
     return render_template(
         "index.html",
         weeks=weeks,
@@ -151,31 +173,34 @@ def index():
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
     """Trigger a sync with Intervals.icu."""
-    config = load_config()
-    db = get_db()
-    result = sync_activities(db, config)
-    db.close()
-    return jsonify(result)
+    try:
+        db = get_db()
+        result = sync_activities(db, CONFIG)
+        return jsonify(result)
+    except Exception as e:
+        log.exception("Sync failed")
+        return jsonify({"success": False, "error": str(e)}), 502
 
 
 if __name__ == "__main__":
-    config = load_config()
-    port = config.get("port", 5000)
+    port = CONFIG.get("port", 5000)
 
-    # Configure logging
-    level = logging.DEBUG if config.get("debug", False) else logging.INFO
+    # Configure logging once with correct level
+    level = logging.DEBUG if CONFIG.get("debug", False) else logging.INFO
     logging.basicConfig(
         level=level,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
+        force=True,
     )
 
     # Auto-sync on first run if DB is empty
-    db = get_db()
+    db = sqlite3.connect(str(_DB_PATH))
+    db.row_factory = sqlite3.Row
     count = db.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
     if count == 0:
         print("No activities found. Running initial sync...")
-        result = sync_activities(db, config)
+        result = sync_activities(db, CONFIG)
         if result["success"]:
             print(f"Initial sync complete: {result['synced']} activities synced.")
         else:

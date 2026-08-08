@@ -5,7 +5,7 @@
 MIN_RECOVERY_SECS = 15
 
 
-def classify(activity, intervals, groups):
+def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
     """Classify an activity based on its interval groups and duration.
 
     Args:
@@ -26,11 +26,11 @@ def classify(activity, intervals, groups):
     rep_group = None
     if has_real_recoveries and groups:
         # Find the group with the highest count (the main interval set)
-        for g in groups:
-            count = g.get("count", 1)
+        for group in groups:
+            count = group.get("count", 1)
             if count >= 2:
                 if rep_group is None or count > rep_group.get("count", 0):
-                    rep_group = g
+                    rep_group = group
 
     if rep_group:
         count = rep_group["count"]
@@ -51,7 +51,7 @@ def classify(activity, intervals, groups):
     if moving_time_mins >= 60:
         return {
             "classification": "long",
-            "display_name": f"Long-{round(moving_time_mins)}m",
+            "display_name": f"Long-{round(moving_time_mins)}",
             "work_interval_time": 0,
             "interval_count": 0,
             "interval_avg_duration": 0,

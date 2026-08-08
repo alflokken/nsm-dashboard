@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS activities (
     id TEXT PRIMARY KEY,
-    start_date_local TEXT NOT NULL,
+    start_date_local TEXT NOT NULL CHECK(start_date_local GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]*'),
     type TEXT NOT NULL,
     name TEXT,
     distance REAL,
@@ -21,6 +21,6 @@ CREATE TABLE IF NOT EXISTS activities (
 CREATE TABLE IF NOT EXISTS sync_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
-);
+) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS idx_activities_date ON activities(start_date_local);

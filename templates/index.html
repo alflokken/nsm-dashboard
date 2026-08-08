@@ -5,8 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NSM - Running Tracker</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏃</text></svg>">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
     <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+    <script>
+    // Theme: apply early to prevent FOUC
+    (function() {
+        var saved = localStorage.getItem('nsm-theme');
+        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    })();
+    </script>
 </head>
 <body>
     <!-- Header -->
@@ -19,12 +28,12 @@
             {% if last_sync %}
             <span class="sync-meta">Last sync: {{ last_sync }}</span>
             {% endif %}
-            <span id="sync-error" class="sync-error d-none" title="Sync failed">&#x2716;</span>
+            <span id="sync-error" class="sync-error d-none" role="alert" aria-live="polite" title="Sync failed">&#x2716;</span>
             <button id="refresh-btn" class="btn btn-sm btn-outline-secondary" onclick="doRefresh()">
                 <span class="label">Sync</span>
                 <span class="spinner-border d-none" role="status"></span>
             </button>
-            <button class="btn btn-sm btn-outline-secondary theme-toggle" onclick="toggleTheme()" title="Toggle dark mode">
+            <button class="btn btn-sm btn-outline-secondary theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode">
                 <span class="theme-icon">&#9789;</span>
             </button>
         </div>
@@ -35,7 +44,7 @@
         <table class="table week-table mb-0">
             <thead>
                 <tr>
-                    <th style="width:54px">Wk</th>
+                    <th class="week-label">Wk</th>
                     <th>Mon</th>
                     <th>Tue</th>
                     <th>Wed</th>
@@ -43,7 +52,7 @@
                     <th>Fri</th>
                     <th>Sat</th>
                     <th>Sun</th>
-                    <th style="width:135px">Totals</th>
+                    <th class="totals-col">Totals</th>
                 </tr>
             </thead>
             <tbody>
@@ -71,7 +80,7 @@
                                 <div class="title">{{ activity.display_name }}{% if week.key == current_week and day == today_weekday and loop.last %}<span class="today-tag">today</span>{% endif %}</div>
                                 <div class="details">
                                     {% if activity.distance %}{{ "%.1f" | format(activity.distance / 1000) }}km{% endif %}
-                                    &middot; {{ format_pace(activity.average_speed) }}
+                                    &middot; {{ activity.average_speed | pace }}
                                     {% if activity.average_heartrate %}&middot; {{ activity.average_heartrate|int }}bpm{% endif %}
                                 </div>
                             </a>
@@ -116,15 +125,9 @@
     </div>
     {% endif %}
 
-    <script>
-    // Theme
-    (function() {
-        const saved = localStorage.getItem('nsm-theme');
-        if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.setAttribute('data-theme', 'dark');
-        }
-    })();
+    </div><!-- /app-container -->
 
+    <script>
     function toggleTheme() {
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         if (isDark) {
@@ -169,6 +172,5 @@
         btn.disabled = false;
     }
     </script>
-    </div><!-- /app-container -->
 </body>
 </html>
