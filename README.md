@@ -45,6 +45,10 @@ Edit `config.json`:
 
 ## How It Works
 
+### Units & Locale
+
+Distance, pace, timezone, and date/time display are automatically fetched from your Intervals.icu profile on every sync.
+
 ### Architecture
 
 ```text

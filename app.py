@@ -3,12 +3,14 @@
 import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, g, render_template, jsonify, request
 
-from sync import sync_activities
+from sync import sync_activities, refresh_prefs
+from formatting import date_format_to_strftime, time_format_to_strftime, is_imperial_measurement
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -61,7 +63,38 @@ def close_db(exc):
         db.close()
 
 
-def get_weeks_data(db, num_weeks=20):
+_KM_PER_MILE = 1.609344
+
+
+def get_prefs(db):
+    """Load athlete display preferences from sync_state."""
+    rows = db.execute(
+        "SELECT key, value FROM sync_state WHERE key LIKE 'pref_%'"
+    ).fetchall()
+    prefs = {row["key"]: row["value"] for row in rows}
+    is_imperial = is_imperial_measurement(prefs.get("pref_measurement"))
+    return {
+        "distance_unit": "mi" if is_imperial else "km",
+        "unit_divisor": _KM_PER_MILE * 1000 if is_imperial else 1000,
+        "timezone": prefs.get("pref_timezone") or "Europe/Oslo",
+        "datetime_format": (
+            date_format_to_strftime(prefs.get("pref_date_format", ""))
+            + " "
+            + time_format_to_strftime(prefs.get("pref_time_format", ""))
+        ),
+    }
+
+
+def _resolve_zone(prefs):
+    """Resolve the athlete's timezone, falling back to UTC on a bad/unknown zone."""
+    try:
+        return ZoneInfo(prefs["timezone"])
+    except ZoneInfoNotFoundError:
+        log.warning("Unknown timezone %r, falling back to UTC", prefs.get("timezone"))
+        return timezone.utc
+
+
+def get_weeks_data(db, num_weeks=20, distance_divisor=1000):
     """Query activities and group them by ISO week for display."""
     rows = db.execute(
         "SELECT * FROM activities ORDER BY start_date_local DESC"
@@ -105,7 +138,7 @@ def get_weeks_data(db, num_weeks=20):
             pct_threshold = 0
 
         week["totals"] = {
-            "distance_km": round(total_distance / 1000, 1),
+            "distance": round(total_distance / distance_divisor, 1),
             "duration_h": total_moving_time // 3600,
             "duration_m": (total_moving_time % 3600) // 60,
             "pct_easy": pct_easy,
@@ -116,25 +149,27 @@ def get_weeks_data(db, num_weeks=20):
     return sorted_weeks, total_weeks
 
 
-def format_pace(average_speed):
-    """Convert m/s to min:sec/km string."""
+def format_pace(average_speed, divisor=1000):
+    """Convert m/s to min:sec per unit distance."""
     if not average_speed or average_speed <= 0:
         return "-"
-    secs_per_km = 1000 / average_speed
-    mins = int(secs_per_km // 60)
-    secs = int(secs_per_km % 60)
+    secs_per_unit = divisor / average_speed
+    mins = int(secs_per_unit // 60)
+    secs = int(secs_per_unit % 60)
     return f"{mins}:{secs:02d}"
 
 
 @app.template_filter("pace")
 def pace_filter(average_speed):
     """Jinja2 filter: {{ speed | pace }}."""
-    return format_pace(average_speed)
+    prefs = g.get("prefs") or {}
+    divisor = prefs.get("unit_divisor", 1000)
+    return format_pace(average_speed, divisor)
 
 
-def current_iso_week():
-    """Return (year, week) for today."""
-    iso = datetime.now().isocalendar()
+def current_iso_week(tz):
+    """Return (year, week) for today, in the given timezone."""
+    iso = datetime.now(tz).isocalendar()
     return (iso[0], iso[1])
 
 
@@ -145,28 +180,34 @@ def index():
     num_weeks = max(1, min(num_weeks, 500))
 
     db = get_db()
-    weeks, total_weeks = get_weeks_data(db, num_weeks)
+    prefs = get_prefs(db)
+    g.prefs = prefs
+    tz = _resolve_zone(prefs)
+    weeks, total_weeks = get_weeks_data(db, num_weeks, prefs["unit_divisor"])
 
-    # Get last sync timestamp
+    # Get last sync timestamp, converted to the athlete's timezone
     row = db.execute("SELECT value FROM sync_state WHERE key = 'last_sync_time'").fetchone()
     last_sync = None
     if row:
         try:
             dt = datetime.fromisoformat(row[0])
-            last_sync = dt.strftime("%d %b %H:%M")
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)  # legacy naive rows: assume UTC
+            last_sync = dt.astimezone(tz).strftime(prefs["datetime_format"])
         except (ValueError, TypeError):
             last_sync = row[0]
 
     return render_template(
         "index.html",
         weeks=weeks,
-        current_week=current_iso_week(),
-        today_weekday=datetime.now().isocalendar()[2] - 1,
+        current_week=current_iso_week(tz),
+        today_weekday=datetime.now(tz).isocalendar()[2] - 1,
         format_pace=format_pace,
         last_sync=last_sync,
         shown_weeks=num_weeks,
         total_weeks=total_weeks,
         has_more=num_weeks < total_weeks,
+        prefs=prefs,
     )
 
 
@@ -194,9 +235,14 @@ if __name__ == "__main__":
         force=True,
     )
 
-    # Auto-sync on first run if DB is empty
     db = sqlite3.connect(str(_DB_PATH))
     db.row_factory = sqlite3.Row
+
+    print("Refreshing athlete preferences...")
+    if not refresh_prefs(db, CONFIG):
+        print("  Warning: could not refresh preferences (using last known values, if any).")
+
+    # Auto-sync on first run if DB is empty
     count = db.execute("SELECT COUNT(*) FROM activities").fetchone()[0]
     if count == 0:
         print("No activities found. Running initial sync...")

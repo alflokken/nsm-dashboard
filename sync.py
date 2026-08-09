@@ -3,7 +3,7 @@
 import logging
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from classify import classify
 
@@ -32,6 +32,58 @@ def _fetch_activities(session, athlete_id, oldest, newest=None):
     resp = session.get(url, params=params, timeout=30)
     resp.raise_for_status()
     return resp.json()
+
+
+def _fetch_athlete_prefs(session, athlete_id):
+    """Fetch athlete preferences (units, timezone, date/time format)."""
+    url = f"{API_BASE}/athlete/{athlete_id}"
+    resp = session.get(url, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    # `or` (not a .get default) also covers the API returning an explicit
+    # JSON null for these fields, not just an absent key.
+    return {
+        "pref_measurement": data.get("measurement_preference") or "meters",
+        "pref_timezone": data.get("timezone") or "Europe/Oslo",
+        "pref_date_format": data.get("date_format") or "",
+        "pref_time_format": data.get("time_format") or "",
+    }
+
+
+def _save_prefs(db, prefs):
+    """Persist athlete preferences to sync_state."""
+    # Drop keys from earlier, incorrect versions of this app.
+    db.execute("DELETE FROM sync_state WHERE key = 'pref_pace_units'")
+    for key, value in prefs.items():
+        db.execute(
+            "INSERT OR REPLACE INTO sync_state (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+
+
+def refresh_prefs(db, config: dict, session=None) -> bool:
+    """Fetch and persist athlete preferences only (no activity sync).
+
+    Reuses `session` if given (e.g. from an in-progress sync); otherwise
+    opens and closes its own. Returns True on success, False if the fetch
+    failed — existing/stale prefs are left untouched on failure.
+    """
+    owns_session = session is None
+    if owns_session:
+        session = _session(config["api_key"])
+    try:
+        prefs = _fetch_athlete_prefs(session, config["athlete_id"])
+    except requests.RequestException as e:
+        log.warning("Failed to fetch athlete preferences: %s", e)
+        return False
+    finally:
+        if owns_session:
+            session.close()
+    _save_prefs(db, prefs)
+    # Commit immediately: preference refresh is a self-contained unit of
+    # work and must not be rolled back if the rest of a sync fails later.
+    db.commit()
+    return True
 
 
 def _fetch_intervals(session, activity_id, retries=1):
@@ -68,6 +120,10 @@ def sync_activities(db, config: dict, full: bool = False) -> dict:
 def _sync(db, session, config, full):
     """Internal sync implementation."""
     athlete_id = config["athlete_id"]
+
+    # Refresh athlete preferences (pace units, timezone, date/time format)
+    # before fetching/processing activity data, so this sync uses current values.
+    refresh_prefs(db, config, session=session)
     activity_types = set(config["activity_types"])
 
     # Determine date range
@@ -171,7 +227,7 @@ def _sync(db, session, config, full):
     )
     db.execute(
         "INSERT OR REPLACE INTO sync_state (key, value) VALUES ('last_sync_time', ?)",
-        (datetime.now().isoformat(),),
+        (datetime.now(timezone.utc).isoformat(),),
     )
     db.commit()
     log.info("Sync complete: %d synced, %d deleted, %d errors", synced, len(deleted_ids), len(errors))

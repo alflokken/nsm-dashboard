@@ -79,7 +79,7 @@
                             <a href="https://intervals.icu/activities/{{ activity.id }}" target="_blank" class="workout-card {{ activity.classification }}">
                                 <div class="title">{{ activity.display_name }}{% if week.key == current_week and day == today_weekday and loop.last %}<span class="today-tag">today</span>{% endif %}</div>
                                 <div class="details">
-                                    {% if activity.distance %}{{ "%.1f" | format(activity.distance / 1000) }}km{% endif %}
+                                    {% if activity.distance %}{{ "%.1f" | format(activity.distance / prefs.unit_divisor) }}{{ prefs.distance_unit }}{% endif %}
                                     &middot; {{ activity.average_speed | pace }}
                                     {% if activity.average_heartrate %}&middot; {{ activity.average_heartrate|int }}bpm{% endif %}
                                 </div>
@@ -96,7 +96,7 @@
                     {% endfor %}
                     <td class="totals-cell">
                         {% if week.totals.activity_count > 0 %}
-                        <span class="totals-primary">{{ week.totals.distance_km }}km &middot; {{ week.totals.duration_h }}h{{ "%02d" | format(week.totals.duration_m) }}</span>
+                        <span class="totals-primary">{{ week.totals.distance }}{{ prefs.distance_unit }} &middot; {{ week.totals.duration_h }}h{{ "%02d" | format(week.totals.duration_m) }}</span>
                         <span class="totals-secondary">{{ week.totals.activity_count }} runs &middot; {{ week.totals.pct_easy }}%E {{ week.totals.pct_threshold }}%T</span>
                         {% else %}
                         <span class="totals-secondary">&mdash;</span>
