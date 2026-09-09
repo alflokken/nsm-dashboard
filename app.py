@@ -3,7 +3,8 @@
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+import threading
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -39,6 +40,9 @@ _DB_PATH = BASE_DIR / CONFIG.get("db_path", "nsm.db")
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
+
+# Serialize syncs so a visit-triggered auto-refresh never overlaps a manual one.
+_sync_lock = threading.Lock()
 
 # Apply schema once at startup
 _init_db = sqlite3.connect(str(_DB_PATH))
@@ -188,14 +192,23 @@ def index():
     # Get last sync timestamp, converted to the athlete's timezone
     row = db.execute("SELECT value FROM sync_state WHERE key = 'last_sync_time'").fetchone()
     last_sync = None
+    last_sync_dt = None
     if row:
         try:
-            dt = datetime.fromisoformat(row[0])
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)  # legacy naive rows: assume UTC
-            last_sync = dt.astimezone(tz).strftime(prefs["datetime_format"])
+            last_sync_dt = datetime.fromisoformat(row[0])
+            if last_sync_dt.tzinfo is None:
+                last_sync_dt = last_sync_dt.replace(tzinfo=timezone.utc)  # legacy naive rows: assume UTC
+            last_sync = last_sync_dt.astimezone(tz).strftime(prefs["datetime_format"])
         except (ValueError, TypeError):
             last_sync = row[0]
+
+    # Stale = never synced, or older than the configured threshold. The page tells
+    # the browser to kick off a background refresh when true (stale-while-revalidate).
+    stale_minutes = CONFIG.get("sync_stale_minutes", 60)
+    if last_sync_dt is None:
+        stale = True
+    else:
+        stale = datetime.now(timezone.utc) - last_sync_dt > timedelta(minutes=stale_minutes)
 
     return render_template(
         "index.html",
@@ -204,6 +217,8 @@ def index():
         today_weekday=datetime.now(tz).isocalendar()[2] - 1,
         format_pace=format_pace,
         last_sync=last_sync,
+        stale=stale,
+        stale_minutes=stale_minutes,
         shown_weeks=num_weeks,
         total_weeks=total_weeks,
         has_more=num_weeks < total_weeks,
@@ -214,6 +229,9 @@ def index():
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
     """Trigger a sync with Intervals.icu."""
+    # Non-blocking: if a sync is already running, tell the caller instead of queuing.
+    if not _sync_lock.acquire(blocking=False):
+        return jsonify({"success": False, "busy": True}), 409
     try:
         db = get_db()
         result = sync_activities(db, CONFIG)
@@ -221,6 +239,8 @@ def refresh():
     except Exception as e:
         log.exception("Sync failed")
         return jsonify({"success": False, "error": str(e)}), 502
+    finally:
+        _sync_lock.release()
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@
   "athlete_id": "0",
   "activity_types": ["Run", "TrailRun", "VirtualRun"],
   "weeks_initial_sync": 12,
+  "sync_stale_minutes": 60,
   "port": 5000,
   "db_path": "data/nsm.db",
   "debug": false

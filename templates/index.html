@@ -143,34 +143,55 @@
     function doRefresh() {
         const btn = document.getElementById('refresh-btn');
         const errEl = document.getElementById('sync-error');
-        errEl.classList.add('d-none');
-        btn.querySelector('.label').textContent = 'Syncing…';
-        btn.querySelector('.spinner-border').classList.remove('d-none');
-        btn.disabled = true;
+        if (errEl) errEl.classList.add('d-none');
+        if (btn) {
+            btn.querySelector('.label').textContent = 'Syncing…';
+            btn.querySelector('.spinner-border').classList.remove('d-none');
+            btn.disabled = true;
+        }
 
         fetch('/api/refresh', { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 if (data.success) {
                     window.location.reload();
-                } else {
+                } else if (data.busy) {
+                    // Another sync is already running; just reset, no error.
+                    resetBtn(btn);
+                } else if (errEl) {
                     errEl.classList.remove('d-none');
                     errEl.title = 'Sync failed: ' + (data.error || 'Unknown error');
                     resetBtn(btn);
                 }
             })
             .catch(err => {
-                errEl.classList.remove('d-none');
-                errEl.title = 'Network error: ' + err;
+                if (errEl) {
+                    errEl.classList.remove('d-none');
+                    errEl.title = 'Network error: ' + err;
+                }
                 resetBtn(btn);
             });
     }
 
     function resetBtn(btn) {
+        if (!btn) return;
         btn.querySelector('.label').textContent = 'Sync';
         btn.querySelector('.spinner-border').classList.add('d-none');
         btn.disabled = false;
     }
+
+    // Stale-while-revalidate: auto-refresh in the background if data is old.
+    {% if stale %}
+    doRefresh();
+    {% endif %}
+
+    // Keep a long-open tab fresh: periodically re-check (server decides if a sync is needed).
+    setInterval(() => {
+        if (document.hidden) return;
+        const btn = document.getElementById('refresh-btn');
+        if (btn && btn.disabled) return;  // sync already in progress
+        window.location.reload();
+    }, {{ stale_minutes }} * 60 * 1000);
     </script>
 </body>
 </html>

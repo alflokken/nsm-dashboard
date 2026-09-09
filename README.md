@@ -39,6 +39,7 @@ Edit `config.json`:
 | `athlete_id` | Athlete ID — `0` resolves to the API key owner | `"0"` |
 | `activity_types` | Activity types to include | `["Run", "TrailRun", "VirtualRun"]` |
 | `weeks_initial_sync` | Number of weeks of history to fetch on the first run | `12` (3 months) |
+| `sync_stale_minutes` | Auto-refresh when the page is opened and the last sync is older than this | `60` |
 | `port` | Local server port | `5000` |
 | `db_path` | SQLite database file path | `"data/nsm.db"` |
 | `debug` | Enable verbose logging for activity counts, filters, and sync details | `false` |
@@ -73,6 +74,7 @@ Intervals.icu API
 
 - **Initial sync:** Downloads all activities from the configured history period. For each run, it fetches interval data from the API to determine the workout classification.
 - **Incremental refresh:** Fetches activities from `last_sync - 2 days` through the current time. The overlap helps catch edits to recent activities.
+- **Auto-refresh on visit:** When you open the dashboard, it renders instantly from the local database, then refreshes in the background only if the last sync is older than `sync_stale_minutes`. A tab left open re-checks on the same interval, so it stays current without a manual reload. You can always force a refresh with the **Sync** button. 
 - **Upserts:** Existing activities are updated by activity ID, while new activities are inserted.
 - **Deleted activities:** The sync detects and removes activities that no longer exist in the configured date range.
 - **Rate limiting:** Waits 100 ms between interval-data requests.
