@@ -85,6 +85,7 @@ Each activity is automatically classified using its Intervals.icu interval data:
 
 | Classification | Rule | Display name |
 | --- | --- | --- |
+| **Race** | Activity `sub_type` is `RACE` — takes priority over all rules below | `Race` |
 | **Interval** | Has one or more `WORK` intervals | `SubT-{count}x{avg_minutes}` |
 | **Long** | Has no intervals and duration is at least 60 minutes | `Long-{minutes}m` |
 | **Easy** | All other activities | `Easy-{minutes}` |

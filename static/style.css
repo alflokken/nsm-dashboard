@@ -5,6 +5,8 @@
     --color-long-hover: #145218;
     --color-interval: #f57c00;
     --color-interval-hover: #e56800;
+    --color-race: #ffeb3b;
+    --color-race-hover: #fdd835;
     --color-empty: #f8f9fb;
     --color-border: #e8eaed;
     --color-border-subtle: #f0f1f3;
@@ -168,6 +170,8 @@ body {
 .workout-card.long:hover { background: var(--color-long-hover); }
 .workout-card.interval { background: var(--color-interval); }
 .workout-card.interval:hover { background: var(--color-interval-hover); }
+.workout-card.race { background: var(--color-race); color: #1a1a1a; }
+.workout-card.race:hover { background: var(--color-race-hover); color: #1a1a1a; }
 
 .workout-card + .workout-card {
     margin-top: 0.15rem;

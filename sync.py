@@ -10,7 +10,7 @@ from classify import classify
 log = logging.getLogger(__name__)
 
 API_BASE = "https://intervals.icu/api/v1"
-FIELDS = "id,start_date_local,type,name,distance,moving_time,elapsed_time,average_heartrate,average_speed,icu_warmup_time,icu_cooldown_time"
+FIELDS = "id,start_date_local,type,sub_type,name,distance,moving_time,elapsed_time,average_heartrate,average_speed,icu_warmup_time,icu_cooldown_time"
 USER_AGENT = "NSM/1.0"
 _RETRY_STATUSES = {429, 500, 502, 503, 504}
 
