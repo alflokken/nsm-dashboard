@@ -1,12 +1,11 @@
 """Intervals.icu sync engine for NSM."""
 
 import logging
-import sqlite3
 import time
 import requests
 from datetime import datetime, timedelta, timezone
 
-from classify import classify, work_metrics
+from classify import classify
 
 log = logging.getLogger(__name__)
 
@@ -97,117 +96,49 @@ def _fetch_intervals(session, activity_id, retries=1):
             continue
         resp.raise_for_status()
         data = resp.json()
-        # [AI-GENERATED] A malformed payload is an error, not an easy workout.
-        if not isinstance(data, dict):
-            raise ValueError("Interval response must be an object")
-        intervals = data.get("icu_intervals")
-        groups = data.get("icu_groups")
-        if not isinstance(intervals, list) or not isinstance(groups, list):
-            raise ValueError("Interval response is missing interval/group lists")
-        return intervals, groups
+        return data.get("icu_intervals", []), data.get("icu_groups", [])
 
 
-# [AI-GENERATED START] Shared persistence and resumable historical work metrics.
-def _store_activity(db, activity, cls):
-    fields = [
-        "id", "start_date_local", "type", "name", "distance", "moving_time",
-        "elapsed_time", "average_heartrate", "average_speed", "icu_warmup_time",
-        "icu_cooldown_time", "classification", "display_name", "work_interval_time",
-        "interval_count", "interval_avg_duration", "work_interval_distance",
-        "work_metrics_status", "work_metrics_error", "synced_at",
-    ]
-    record = {
-        **activity, **cls, "synced_at": datetime.now().isoformat(),
-    }
-    updates = ", ".join(f"{field} = excluded.{field}" for field in fields[1:])
-    db.execute(
-        f"""INSERT INTO activities ({', '.join(fields)})
-            VALUES ({', '.join('?' for _ in fields)})
-            ON CONFLICT(id) DO UPDATE SET {updates}""",
-        [record.get(field) for field in fields],
-    )
+def _backfill_work_metrics(db, session):
+    """Fill work distance for stored interval sessions that lack it.
 
-
-def _sync_activity(db, session, activity, errors):
-    cls = None
-    try:
-        intervals, groups = _fetch_intervals(session, activity["id"])
-        cls = classify(activity, intervals, groups)
-        cls.update(work_metrics(cls["classification"], intervals, groups))
-        cls.update(work_metrics_status="complete", work_metrics_error=None)
-        _store_activity(db, activity, cls)
-        return True
-    except (requests.RequestException, ValueError, TypeError, KeyError, sqlite3.Error) as exc:
-        message = f"{activity['id']}: {exc}"
-        log.warning("Activity sync failed: %s", message)
-        errors.append(message)
-        existing = db.execute(
-            "SELECT id FROM activities WHERE id = ?", (activity["id"],)
-        ).fetchone()
-        if existing:
-            db.execute(
-                """UPDATE activities SET work_metrics_status = 'failed',
-                   work_metrics_error = ? WHERE id = ?""",
-                (str(exc), activity["id"]),
-            )
-        else:
-            if cls is None:
-                cls = classify(activity, [], [])
-                if cls["classification"] != "race":
-                    cls.update(classification="unknown", display_name="Unavailable")
-            cls.update(
-                work_interval_time=None, work_interval_distance=None,
-                work_metrics_status="failed", work_metrics_error=str(exc),
-            )
-            _store_activity(db, activity, cls)
-        return False
-    finally:
-        time.sleep(0.1)
-
-
-def backfill_remaining(db):
-    return db.execute(
-        """SELECT COUNT(*) FROM activities
-           WHERE work_metrics_status != 'complete'
-           AND classification IN ('interval', 'unknown')"""
-    ).fetchone()[0]
-
-
-def _backfill_work_metrics(db, session, attempted, errors):
-    db.execute(
-        """INSERT OR REPLACE INTO sync_state (key, value)
-           VALUES ('work_metrics_backfill_attempted', ?)""",
-        (datetime.now(timezone.utc).isoformat(),),
-    )
-    db.commit()
-    cursor = db.execute(
-        """SELECT * FROM activities WHERE work_metrics_status != 'complete'
-           AND classification IN ('interval', 'unknown')
-           ORDER BY start_date_local, id"""
-    )
-    fields = [column[0] for column in cursor.description]
-    candidates = [dict(zip(fields, row)) for row in cursor.fetchall()]
-    completed = 0
-    for index, activity in enumerate(candidates, 1):
-        if activity["id"] not in attempted:
-            completed += _sync_activity(db, session, activity, errors)
-        if index % 25 == 0:
+    Covers history older than the incremental sync window (e.g. sessions stored
+    before work distance was tracked). Sessions are classified again from their
+    current Intervals.icu data, so edited ones can change type. Rows that fail
+    stay NULL and are retried on the next sync. Returns a list of error messages.
+    """
+    pending = db.execute(
+        "SELECT id, moving_time FROM activities "
+        "WHERE classification = 'interval' AND work_interval_distance IS NULL"
+    ).fetchall()
+    errors = []
+    for count, (activity_id, moving_time) in enumerate(pending, 1):
+        try:
+            intervals, groups = _fetch_intervals(session, activity_id)
+            cls = classify({"moving_time": moving_time}, intervals, groups)
+        except (requests.RequestException, ValueError) as e:
+            errors.append(f"{activity_id}: {e}")
+            continue
+        db.execute(
+            """UPDATE activities SET classification = ?, display_name = ?,
+                work_interval_time = ?, work_interval_distance = ?,
+                interval_count = ?, interval_avg_duration = ?
+                WHERE id = ?""",
+            (
+                cls["classification"],
+                cls["display_name"],
+                cls["work_interval_time"],
+                cls["work_interval_distance"],
+                cls["interval_count"],
+                cls["interval_avg_duration"],
+                activity_id,
+            ),
+        )
+        if count % 25 == 0:
             db.commit()
-            log.info("Work metrics backfill: %d/%d processed", index, len(candidates))
-    remaining = backfill_remaining(db)
-    if not remaining:
-        db.execute(
-            """INSERT OR IGNORE INTO sync_state (key, value)
-               VALUES ('work_metrics_backfill_completed', ?)""",
-            (datetime.now(timezone.utc).isoformat(),),
-        )
-    else:
-        db.execute(
-            "DELETE FROM sync_state WHERE key = 'work_metrics_backfill_completed'"
-        )
-    db.commit()
-    return {"completed": completed, "remaining": remaining}
-# [AI-GENERATED END]
+            log.info("  work metrics backfill %d/%d...", count, len(pending))
+        time.sleep(0.1)
+    return errors
 
 
 def sync_activities(db, config: dict, full: bool = False) -> dict:
@@ -269,11 +200,57 @@ def _sync(db, session, config, full):
     errors = []
 
     for activity in activities:
-        # [AI-GENERATED] Failed interval fetches preserve previously valid data.
-        synced += _sync_activity(db, session, activity, errors)
-        if synced and synced % 25 == 0:
-            db.commit()
-            log.info("  %d/%d processed...", synced, len(activities))
+        activity_id_val = activity["id"]
+
+        # Fetch intervals for classification. On failure keep any stored row as is
+        # (a missing interval list would misclassify the run as easy).
+        try:
+            intervals, groups = _fetch_intervals(session, activity_id_val)
+            # Small delay to be polite to API
+            time.sleep(0.1)
+        except requests.RequestException as e:
+            errors.append(f"{activity_id_val}: {e}")
+            continue
+
+        # Classify and store; skip and record a single bad activity rather than aborting the whole sync
+        try:
+            cls = classify(activity, intervals, groups)
+            now = datetime.now().isoformat()
+            db.execute(
+                """INSERT OR REPLACE INTO activities
+                    (id, start_date_local, type, name, distance, moving_time,
+                    elapsed_time, average_heartrate, average_speed,
+                    icu_warmup_time, icu_cooldown_time,
+                    classification, display_name, work_interval_time,
+                    interval_count, interval_avg_duration,
+                    work_interval_distance, synced_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    activity_id_val,
+                    activity.get("start_date_local"),
+                    activity.get("type"),
+                    activity.get("name"),
+                    activity.get("distance"),
+                    activity.get("moving_time"),
+                    activity.get("elapsed_time"),
+                    activity.get("average_heartrate"),
+                    activity.get("average_speed"),
+                    activity.get("icu_warmup_time"),
+                    activity.get("icu_cooldown_time"),
+                    cls["classification"],
+                    cls["display_name"],
+                    cls["work_interval_time"],
+                    cls["interval_count"],
+                    cls["interval_avg_duration"],
+                    cls["work_interval_distance"],
+                    now,
+                ),
+            )
+            synced += 1
+            if synced % 25 == 0:
+                log.info("  %d/%d processed...", synced, len(activities))
+        except Exception as e:
+            errors.append(f"{activity_id_val}: {e}")
 
     # Detect deleted activities: remove local IDs not in API response
     api_ids = {a["id"] for a in activities}
@@ -287,8 +264,7 @@ def _sync(db, session, config, full):
         placeholders = ",".join("?" * len(deleted_ids))
         db.execute(f"DELETE FROM activities WHERE id IN ({placeholders})", list(deleted_ids))
 
-    # [AI-GENERATED] Historical candidates are independent of the recent sync window.
-    backfill = _backfill_work_metrics(db, session, api_ids, errors)
+    errors.extend(_backfill_work_metrics(db, session))
 
     # Update sync state
     db.execute(
@@ -307,5 +283,4 @@ def _sync(db, session, config, full):
         "synced": synced,
         "deleted": len(deleted_ids),
         "errors": errors,
-        "backfill": backfill,  # [AI-GENERATED]
     }

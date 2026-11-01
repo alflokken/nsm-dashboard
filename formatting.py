@@ -46,3 +46,22 @@ def is_imperial_measurement(measurement_preference):
     or "feet" (imperial) rather than literal "metric"/"imperial" strings.
     """
     return "feet" in (measurement_preference or "").lower()
+
+
+def format_duration(seconds):
+    """e.g. 1800 -> '30:00', 3725 -> '1:02:05'."""
+    minutes, secs = divmod(round(seconds), 60)
+    hours, minutes = divmod(minutes, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def format_pace_seconds(secs_per_unit):
+    """Seconds per km/mile -> 'm:ss', or '-' if unknown.
+
+    Rounds to the nearest second so a 30:00 / 6.41 km work set reads 4:41
+    like Garmin's summary (the training grid's per-run pace truncates).
+    """
+    if not secs_per_unit:
+        return "-"
+    minutes, secs = divmod(round(secs_per_unit), 60)
+    return f"{minutes}:{secs:02d}"

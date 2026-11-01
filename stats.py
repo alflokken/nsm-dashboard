@@ -1,160 +1,137 @@
-"""[AI-GENERATED] Work-only calendar aggregation and local SVG chart geometry."""
+"""SubT work-interval totals per week/month, and SVG chart geometry for the stats page."""
 
 from datetime import date, timedelta
 
-
-def format_duration(seconds: float | None) -> str:
-    if seconds is None:
-        return "-"
-    total = round(seconds)
-    hours, remainder = divmod(total, 3600)
-    minutes, seconds = divmod(remainder, 60)
-    if hours:
-        return f"{hours}:{minutes:02d}:{seconds:02d}"
-    return f"{minutes}:{seconds:02d}"
+from formatting import format_pace_seconds
 
 
-def format_work_pace(seconds_per_unit: float | None) -> str:
-    if seconds_per_unit is None:
-        return "-"
-    seconds = round(seconds_per_unit)
-    return f"{seconds // 60}:{seconds % 60:02d}"
-
-
-def _period_start(day: date, grouping: str) -> date:
+def _period_start(day, grouping):
     if grouping == "monthly":
         return day.replace(day=1)
-    return day - timedelta(days=day.weekday())
+    return day - timedelta(days=day.weekday())  # Monday
 
 
-def _next_period(day: date, grouping: str) -> date:
+def _next_start(start, grouping):
     if grouping == "monthly":
-        return (day.replace(day=28) + timedelta(days=4)).replace(day=1)
-    return day + timedelta(days=7)
+        return (start + timedelta(days=32)).replace(day=1)
+    return start + timedelta(days=7)
 
 
-def aggregate_stats(
-    rows: list[dict], today: date, weeks: str = "12",
-    grouping: str = "weekly", divisor: float = 1000,
-) -> dict:
-    if weeks not in ("12", "26", "52", "all"):
-        raise ValueError("Unsupported stats range")
-    if grouping not in ("weekly", "monthly"):
-        raise ValueError("Unsupported stats grouping")
-    if divisor <= 0:
-        raise ValueError("Distance divisor must be positive")
+def _label(start, grouping):
+    if grouping == "monthly":
+        return start.strftime("%Y-%m")
+    year, week, _ = start.isocalendar()
+    return f"{year}-W{week:02d}"
 
-    current_monday = _period_start(today, "weekly")
-    if weeks == "all":
-        dates = [date.fromisoformat(row["start_date_local"][:10]) for row in rows]
-        start = _period_start(min(dates + [today]), "weekly")
+
+def aggregate_stats(rows, today, weeks=12, grouping="weekly", divisor=1000):
+    """Total work-only time/distance per period, oldest first.
+
+    rows: activity dicts. weeks: how many calendar weeks back, or None for all
+    history. Monthly grouping uses whole calendar months from the one containing
+    the range start. Pace is total work time / total work distance (seconds per
+    km or mile), never an average of session paces. Interval sessions without
+    work metrics yet count as `missing`, and make that period's pace unknown.
+    """
+    sessions = [r for r in rows if r["classification"] == "interval"]
+    if weeks is None:
+        first = min(
+            (date.fromisoformat(r["start_date_local"][:10]) for r in sessions),
+            default=today,
+        )
     else:
-        start = current_monday - timedelta(weeks=int(weeks) - 1)
+        first = today - timedelta(weeks=weeks - 1, days=today.weekday())
 
     periods = {}
-    day = _period_start(start, grouping)
-    while day <= today:
-        end = _next_period(day, grouping)
-        iso = day.isocalendar()
-        label = day.strftime("%Y-%m") if grouping == "monthly" else f"{iso.year}-W{iso.week:02d}"
-        periods[day] = {
-            "label": label, "start": day, "end": end - timedelta(days=1),
-            "ongoing": day <= today < end,
-            "partial": grouping == "monthly" and (day < start or end > today + timedelta(days=1)),
-            "sessions": [], "session_count": 0, "missing_count": 0,
-            "work_time": 0, "work_distance": 0.0, "pace": None,
+    start = _period_start(first, grouping)
+    while start <= today:
+        end = _next_start(start, grouping)
+        periods[start] = {
+            "label": _label(start, grouping),
+            "ongoing": end > today,
+            "sessions": [],
+            "work_time": 0,
+            "work_distance": 0.0,
+            "missing": 0,
+            "pace": None,
         }
-        day = end
+        start = end
 
-    for row in rows:
-        activity_day = date.fromisoformat(row["start_date_local"][:10])
-        if not start <= activity_day <= today:
+    for row in sessions:
+        day = date.fromisoformat(row["start_date_local"][:10])
+        period = periods.get(_period_start(day, grouping))
+        if period is None:
             continue
-        if row["classification"] not in ("interval", "unknown"):
-            continue
-        period = periods[_period_start(activity_day, grouping)]
-        session = dict(row)
-        session["pace"] = None
-        if row["classification"] == "interval":
-            period["session_count"] += 1
-        valid = (
-            row.get("work_metrics_status") == "complete"
-            and row.get("work_interval_distance") is not None
-            and row.get("work_interval_time") is not None
-            and row["work_interval_distance"] > 0
-            and row["work_interval_time"] > 0
-        )
-        if valid:
+        session = dict(row, pace=None)
+        if row["work_interval_distance"]:
+            session["pace"] = row["work_interval_time"] * divisor / row["work_interval_distance"]
             period["work_time"] += row["work_interval_time"]
             period["work_distance"] += row["work_interval_distance"] / divisor
-            session["pace"] = row["work_interval_time"] * divisor / row["work_interval_distance"]
         else:
-            period["missing_count"] += 1
+            period["missing"] += 1
         period["sessions"].append(session)
 
-    result = list(periods.values())
-    for period in result:
-        period["complete"] = period["missing_count"] == 0
-        if period["complete"] and period["work_distance"] > 0:
+    for period in periods.values():
+        if period["work_distance"] and not period["missing"]:
             period["pace"] = period["work_time"] / period["work_distance"]
-    return {"periods": result, "start": start, "end": today}
+    return list(periods.values())
 
 
-def chart_geometry(periods: list[dict], metric: str) -> dict:
-    if metric not in ("pace", "work_distance"):
-        raise ValueError("Unsupported chart metric")
+def chart_geometry(periods, metric):
+    """Pre-computed SVG coordinates for a chart over `periods`.
+
+    metric 'pace' is drawn as a line with faster (lower) pace higher up;
+    'work_distance' as bars. Periods with unknown values leave a gap.
+    """
     width = max(760, 70 + len(periods) * 18)
     left, top, height = 65, 20, 180
-    plot_width = width - left - 20
-    step = plot_width / max(len(periods), 1)
-    values = [
-        period[metric] for period in periods
-        if period["complete"] and period[metric] is not None
-    ]
-    if metric == "pace":
-        low = min(values, default=240)
-        high = max(values, default=360)
-        padding = max((high - low) * 0.1, 5)
-        low, high = max(0, low - padding), high + padding
-    else:
-        low, high = 0, max(max(values, default=0) * 1.1, 1)
+    step = (width - left - 20) / len(periods)
 
-    def y(value):
-        fraction = (value - low) / (high - low)
+    def value(period):
+        return None if period["missing"] else period[metric]
+
+    known = [value(p) for p in periods if value(p) is not None]
+    if metric == "pace":
+        low, high = min(known, default=240), max(known, default=360)
+        pad = max((high - low) * 0.1, 5)
+        low, high = max(low - pad, 0), high + pad
+    else:
+        low, high = 0, max(max(known, default=0) * 1.1, 1)
+
+    def y(v):
+        fraction = (v - low) / (high - low)
         return top + height * (fraction if metric == "pace" else 1 - fraction)
 
-    ticks = []
-    for index in range(5):
-        value = low + (high - low) * index / 4
-        ticks.append({
-            "y": y(value),
-            "label": format_work_pace(value) if metric == "pace" else f"{value:.1f}",
-        })
+    def tick_label(v):
+        return format_pace_seconds(v) if metric == "pace" else f"{v:.1f}"
+
+    ticks = [
+        {"y": y(low + (high - low) * i / 4), "label": tick_label(low + (high - low) * i / 4)}
+        for i in range(5)
+    ]
 
     points, segments, labels = [], [], []
     previous = None
     label_every = max(1, (len(periods) + 9) // 10)
-    for index, period in enumerate(periods):
-        x = left + step * (index + 0.5)
-        if index % label_every == 0 or index == len(periods) - 1:
+    for i, period in enumerate(periods):
+        x = left + step * (i + 0.5)
+        if i % label_every == 0:
             labels.append({"x": x, "label": period["label"]})
-        value = period[metric] if period["complete"] else None
-        if value is None:
+        v = value(period)
+        if v is None:
             previous = None
             continue
         point = {
-            "x": x, "y": y(value), "bar_x": x - step * 0.34,
-            "bar_width": step * 0.68, "bar_height": top + height - y(value),
-            "label": period["label"],
-            "value": format_work_pace(value) if metric == "pace" else f"{value:.2f}",
-            "ongoing": period["ongoing"], "partial": period["partial"],
+            "x": x, "y": y(v), "label": period["label"],
+            "text": tick_label(v) if metric == "pace" else f"{v:.2f}",
+            "faded": period["ongoing"],
         }
-        if previous is not None:
-            segments.append({"a": previous, "b": point})
+        if previous:
+            segments.append((previous, point))
         points.append(point)
         previous = point
     return {
-        "width": width, "height": 260, "left": left, "right": width - 20,
-        "bottom": top + height, "ticks": ticks, "labels": labels,
-        "points": points, "segments": segments, "metric": metric,
+        "width": width, "height": top + height + 40, "left": left,
+        "right": width - 20, "bottom": top + height, "bar_width": step * 0.68,
+        "ticks": ticks, "labels": labels, "points": points, "segments": segments,
     }

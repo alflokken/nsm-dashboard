@@ -1,8 +1,7 @@
-{# [AI-GENERATED] Geometry comes from the same period totals as the stats table. #}
-<div class="chart-scroll" tabindex="0" aria-label="{{ chart_title }} chart; scroll for more periods">
-<svg class="stats-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" style="min-width: {{ chart.width }}px" role="img" aria-labelledby="{{ chart.metric }}-title {{ chart.metric }}-desc">
-    <title id="{{ chart.metric }}-title">{{ chart_title }}</title>
-    <desc id="{{ chart.metric }}-desc">{{ chart_description }} Values are listed in the table below. Incomplete data creates gaps.</desc>
+{# One SVG chart: pace as a line, work_distance as bars. Coordinates come from stats.chart_geometry. #}
+<div class="chart-scroll">
+<svg class="stats-chart" viewBox="0 0 {{ chart.width }} {{ chart.height }}" style="min-width: {{ chart.width }}px" role="img" aria-label="{{ title }}">
+    <title>{{ title }}</title>
     {% for tick in chart.ticks %}
     <line class="chart-grid" x1="{{ chart.left }}" y1="{{ tick.y }}" x2="{{ chart.right }}" y2="{{ tick.y }}"/>
     <text class="chart-label" x="{{ chart.left - 8 }}" y="{{ tick.y + 4 }}" text-anchor="end">{{ tick.label }}</text>
@@ -10,19 +9,17 @@
     {% for label in chart.labels %}
     <text class="chart-label" x="{{ label.x }}" y="{{ chart.bottom + 25 }}" text-anchor="middle">{{ label.label }}</text>
     {% endfor %}
-    {% if chart.metric == 'pace' %}
-        {% for segment in chart.segments %}
-        <line class="chart-pace-line {{ 'chart-ongoing' if segment.b.ongoing or segment.b.partial else '' }}" x1="{{ segment.a.x }}" y1="{{ segment.a.y }}" x2="{{ segment.b.x }}" y2="{{ segment.b.y }}"/>
+    {% if line %}
+        {% for a, b in chart.segments %}
+        <line class="chart-line{{ ' chart-faded' if b.faded }}" x1="{{ a.x }}" y1="{{ a.y }}" x2="{{ b.x }}" y2="{{ b.y }}"/>
         {% endfor %}
     {% endif %}
     {% for point in chart.points %}
-    {% if chart.metric == 'pace' %}
-    <circle class="chart-point {{ 'chart-ongoing' if point.ongoing or point.partial else '' }}" cx="{{ point.x }}" cy="{{ point.y }}" r="4" tabindex="0">
-    {% else %}
-    <rect class="chart-bar {{ 'chart-ongoing' if point.ongoing or point.partial else '' }}" x="{{ point.bar_x }}" y="{{ point.y }}" width="{{ point.bar_width }}" height="{{ point.bar_height }}" rx="2" tabindex="0">
-    {% endif %}
-        <title>{{ point.label }}: {{ point.value }} {{ chart_unit }}{% if point.ongoing %} (ongoing){% elif point.partial %} (partial range){% endif %}</title>
-    {% if chart.metric == 'pace' %}</circle>{% else %}</rect>{% endif %}
+        {% if line %}
+        <circle class="chart-point{{ ' chart-faded' if point.faded }}" cx="{{ point.x }}" cy="{{ point.y }}" r="4"><title>{{ point.label }}: {{ point.text }}{{ unit }}</title></circle>
+        {% else %}
+        <rect class="chart-bar{{ ' chart-faded' if point.faded }}" x="{{ point.x - chart.bar_width / 2 }}" y="{{ point.y }}" width="{{ chart.bar_width }}" height="{{ chart.bottom - point.y }}" rx="2"><title>{{ point.label }}: {{ point.text }}{{ unit }}</title></rect>
+        {% endif %}
     {% endfor %}
 </svg>
 </div>
