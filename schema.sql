@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS activities (
     work_interval_time INTEGER DEFAULT 0,
     interval_count INTEGER DEFAULT 0,
     interval_avg_duration INTEGER DEFAULT 0,
+    -- [AI-GENERATED] Work-only stats; pending is distinct from genuine zero work.
+    work_interval_distance REAL,
+    work_metrics_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(work_metrics_status IN ('pending', 'complete', 'failed')),
+    work_metrics_error TEXT,
     synced_at TEXT NOT NULL
 );
 

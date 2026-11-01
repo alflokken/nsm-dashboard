@@ -4,13 +4,17 @@ import json
 import logging
 import sqlite3
 import threading
+import requests  # [AI-GENERATED] Explicit startup-sync exception handling.
 from datetime import datetime, timedelta, timezone
+from contextlib import closing  # [AI-GENERATED] Explicitly close background DB handles.
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from flask import Flask, g, render_template, jsonify, request
 
-from sync import sync_activities, refresh_prefs
+from sync import sync_activities, refresh_prefs, backfill_remaining
+from database import initialize_database  # [AI-GENERATED]
+from stats import aggregate_stats, chart_geometry, format_duration, format_work_pace  # [AI-GENERATED]
 from formatting import date_format_to_strftime, time_format_to_strftime, is_imperial_measurement
 
 BASE_DIR = Path(__file__).parent
@@ -46,8 +50,7 @@ _sync_lock = threading.Lock()
 
 # Apply schema once at startup
 _init_db = sqlite3.connect(str(_DB_PATH))
-with open(SCHEMA_PATH) as f:
-    _init_db.executescript(f.read())
+initialize_database(_init_db, SCHEMA_PATH)  # [AI-GENERATED] Includes legacy migration.
 _init_db.close()
 
 
@@ -177,18 +180,8 @@ def current_iso_week(tz):
     return (iso[0], iso[1])
 
 
-@app.route("/")
-def index():
-    """Main page: weekly training grid."""
-    num_weeks = request.args.get("weeks", 20, type=int)
-    num_weeks = max(1, min(num_weeks, 500))
-
-    db = get_db()
-    prefs = get_prefs(db)
-    g.prefs = prefs
-    tz = _resolve_zone(prefs)
-    weeks, total_weeks = get_weeks_data(db, num_weeks, prefs["unit_divisor"])
-
+# [AI-GENERATED START] Shared sync context for the training and stats pages.
+def sync_context(db, prefs, tz):
     # Get last sync timestamp, converted to the athlete's timezone
     row = db.execute("SELECT value FROM sync_state WHERE key = 'last_sync_time'").fetchone()
     last_sync = None
@@ -210,21 +203,86 @@ def index():
     else:
         stale = datetime.now(timezone.utc) - last_sync_dt > timedelta(minutes=stale_minutes)
 
+    attempted = db.execute(
+        "SELECT value FROM sync_state WHERE key = 'work_metrics_backfill_attempted'"
+    ).fetchone()
+    if backfill_remaining(db) and not attempted:
+        stale = True
+    return {
+        "last_sync": last_sync, "stale": stale,
+        "stale_minutes": stale_minutes, "syncing": _sync_lock.locked(),
+    }
+# [AI-GENERATED END]
+
+
+@app.route("/")
+def index():
+    """Main page: weekly training grid."""
+    num_weeks = request.args.get("weeks", 20, type=int)
+    num_weeks = max(1, min(num_weeks, 500))
+    db = get_db()
+    prefs = get_prefs(db)
+    g.prefs = prefs
+    tz = _resolve_zone(prefs)
+    weeks, total_weeks = get_weeks_data(db, num_weeks, prefs["unit_divisor"])
+
     return render_template(
         "index.html",
         weeks=weeks,
         current_week=current_iso_week(tz),
         today_weekday=datetime.now(tz).isocalendar()[2] - 1,
         format_pace=format_pace,
-        last_sync=last_sync,
-        stale=stale,
-        stale_minutes=stale_minutes,
+        **sync_context(db, prefs, tz),
         shown_weeks=num_weeks,
         total_weeks=total_weeks,
         has_more=num_weeks < total_weeks,
         prefs=prefs,
     )
 
+
+# [AI-GENERATED START] SQLite-only stats route with shared weighted chart/table data.
+@app.route("/stats")
+def stats_page():
+    weeks = request.args.get("weeks", "12")
+    grouping = request.args.get("grouping", "weekly")
+    if weeks not in ("12", "26", "52", "all") or grouping not in ("weekly", "monthly"):
+        return "Invalid stats range or grouping", 400
+    db = get_db()
+    prefs = get_prefs(db)
+    g.prefs = prefs
+    tz = _resolve_zone(prefs)
+    rows = [dict(row) for row in db.execute(
+        "SELECT * FROM activities ORDER BY start_date_local, id"
+    )]
+    data = aggregate_stats(rows, datetime.now(tz).date(), weeks, grouping, prefs["unit_divisor"])
+    remaining = backfill_remaining(db)
+    complete = db.execute(
+        """SELECT COUNT(*) FROM activities WHERE classification = 'interval'
+           AND work_metrics_status = 'complete'"""
+    ).fetchone()[0]
+    return render_template(
+        "stats.html", prefs=prefs, weeks=weeks, grouping=grouping,
+        data=data, remaining=remaining, completed=complete,
+        pace_chart=chart_geometry(data["periods"], "pace"),
+        distance_chart=chart_geometry(data["periods"], "work_distance"),
+        format_duration=format_duration, format_work_pace=format_work_pace,
+        **sync_context(db, prefs, tz),
+    )
+
+
+def _startup_backfill():
+    if not _sync_lock.acquire(blocking=False):
+        return
+    try:
+        with closing(sqlite3.connect(str(_DB_PATH))) as db, db:
+            result = sync_activities(db, CONFIG)
+            if not result["success"]:
+                log.error("Startup work metrics sync failed: %s", result.get("error"))
+    except (sqlite3.Error, requests.RequestException, ValueError) as exc:
+        log.exception("Startup work metrics sync failed: %s", exc)
+    finally:
+        _sync_lock.release()
+# [AI-GENERATED END]
 
 @app.route("/api/refresh", methods=["POST"])
 def refresh():
@@ -274,6 +332,12 @@ if __name__ == "__main__":
         if result.get("errors"):
             print(f"  Warnings: {len(result['errors'])} interval fetch errors")
     db.close()
+
+    # [AI-GENERATED] Start historical backfill without delaying page rendering.
+    with closing(sqlite3.connect(str(_DB_PATH))) as db:
+        needs_backfill = backfill_remaining(db) > 0
+    if needs_backfill:
+        threading.Thread(target=_startup_backfill, daemon=True).start()
 
     print(f"Starting NSM on http://localhost:{port}")
     app.run(host="0.0.0.0", port=port, debug=False)

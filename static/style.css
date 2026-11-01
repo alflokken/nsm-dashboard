@@ -16,6 +16,7 @@
     --text-secondary: #5f6368;
     --radius-card: 6px;
     --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.12);
+    --panel-background: #fff; /* [AI-GENERATED] Shared stats surface. */
 }
 
 html {
@@ -357,6 +358,7 @@ body {
 
 /* Dark mode */
 [data-theme="dark"] {
+    --panel-background: #1a1d21; /* [AI-GENERATED] */
     --color-empty: #1e2128;
     --color-border: #2d3139;
     --color-border-subtle: #252830;
@@ -366,6 +368,63 @@ body {
     --text-secondary: #8b8f96;
     --shadow-card-hover: 0 2px 8px rgba(0,0,0,0.3);
 }
+
+/* [AI-GENERATED START] Stats layout and locally rendered SVG charts. */
+.header-title { display: flex; align-items: center; gap: 1rem; }
+.page-nav { display: flex; gap: 0.6rem; font-size: 0.72rem; }
+.page-nav a { color: var(--text-secondary); text-decoration: none; }
+.page-nav a[aria-current="page"] { color: var(--color-current-accent); font-weight: 700; }
+.stats-page .app-container { min-width: 0; }
+.stats-content { padding: 0.75rem; }
+.stats-heading { display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.stats-heading h1 { font-size: 1.2rem; margin: 0 0 0.25rem; }
+.stats-heading p, .stats-explanation { color: var(--text-secondary); font-size: 0.7rem; }
+.stats-filters { display: flex; gap: 0.75rem; align-items: start; }
+.stats-filters label { font-size: 0.7rem; color: var(--text-secondary); }
+.stats-filters select {
+    display: block; padding: 0.3rem; border: 1px solid var(--color-border);
+    border-radius: 4px; color: var(--text-primary); background: var(--panel-background);
+}
+.stats-panel {
+    margin: 0.75rem 0; padding: 0.75rem; border: 1px solid var(--color-border);
+    border-radius: 8px; background: var(--panel-background);
+}
+.stats-panel h2 { font-size: 0.85rem; margin: 0 0 0.4rem; }
+.stats-panel h2 span { color: var(--text-secondary); font-weight: 400; font-size: 0.65rem; }
+.stats-notice {
+    padding: 0.6rem; margin: 0.5rem 0; font-size: 0.75rem;
+    background: var(--color-empty); border-left: 3px solid var(--color-current-accent);
+}
+.chart-scroll, .stats-table-scroll { overflow-x: auto; }
+.stats-chart { display: block; width: 100%; }
+.chart-grid { stroke: var(--color-border); stroke-width: 1; }
+.chart-label { fill: var(--text-secondary); font-size: 11px; }
+.chart-pace-line { stroke: var(--color-current-accent); stroke-width: 2; }
+.chart-point { fill: var(--color-current-accent); }
+.chart-bar { fill: var(--color-interval); }
+.chart-ongoing { opacity: 0.45; stroke-dasharray: 4 3; }
+.chart-point:focus, .chart-bar:focus { outline: 2px solid var(--text-primary); }
+.stats-table { width: 100%; font-size: 0.75rem; min-width: 32rem; }
+.stats-table caption { color: var(--text-secondary); caption-side: top; }
+.stats-table th, .stats-table td { padding: 0.6rem; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+.stats-table th { white-space: nowrap; }
+.stats-table td:not(:first-child), .stats-table th:not(:first-child) { text-align: right; white-space: nowrap; }
+.stats-current { background: var(--color-current-week); }
+.stats-badge { font-size: 0.6rem; color: var(--text-secondary); margin-left: 0.35rem; }
+.stats-warning { color: var(--color-interval); }
+.stats-sessions { padding-left: 1rem; margin: 0.6rem 0 0; }
+.stats-sessions li { margin: 0.4rem 0; }
+.stats-sessions a { color: var(--color-current-accent); }
+.stats-sessions span { display: block; color: var(--text-secondary); }
+.workout-card.unknown { background: var(--text-secondary); }
+@media (max-width: 650px) {
+    .stats-page .app-header { flex-wrap: wrap; gap: 0.5rem; }
+    .stats-page .header-title { flex-wrap: wrap; gap: 0.5rem; }
+    .stats-page .sync-meta { display: none; }
+    .stats-content { padding: 0.5rem 0; }
+    .stats-panel { padding: 0.5rem; }
+}
+/* [AI-GENERATED END] */
 
 [data-theme="dark"] body {
     background: #111315;
@@ -423,4 +482,3 @@ body {
     color: var(--text-primary);
     border-color: #3d4149;
 }
-

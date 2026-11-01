@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{# [AI-GENERATED] Work-only progress snapshot; races and easy mileage are excluded. #}
+{% block title %}SubT Stats{% endblock %}
+{% block content %}
+<main class="stats-content">
+    <div class="stats-heading">
+        <div>
+            <h1>SubT progress</h1>
+            <p>Work intervals only &middot; {{ data.start }} to {{ data.end }}</p>
+        </div>
+        <form class="stats-filters" method="get" action="{{ url_for('stats_page') }}">
+            <label>Range
+                <select name="weeks" onchange="this.form.submit()">
+                    {% for value, text in [('12','12 weeks'), ('26','26 weeks'), ('52','52 weeks'), ('all','All history')] %}
+                    <option value="{{ value }}" {% if weeks == value %}selected{% endif %}>{{ text }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Group by
+                <select name="grouping" onchange="this.form.submit()">
+                    <option value="weekly" {% if grouping == 'weekly' %}selected{% endif %}>Week</option>
+                    <option value="monthly" {% if grouping == 'monthly' %}selected{% endif %}>Month</option>
+                </select>
+            </label>
+            <noscript><button type="submit">Apply</button></noscript>
+        </form>
+    </div>
+    {% if remaining %}
+    <div class="stats-notice" role="status">
+        Work metrics: {{ completed }} sessions ready, {{ remaining }} activities pending or failed.
+        {% if syncing %}Historical sync is running; this page updates automatically.
+        {% else %}Use Sync to backfill/retry missing history.{% endif %}
+        Incomplete periods are not plotted.
+    </div>
+    {% endif %}
+    {% if not data.periods|selectattr('session_count')|list %}
+    <p class="stats-notice">No SubT sessions in this range. Choose a wider range or sync your activities.</p>
+    {% endif %}
+    <section class="stats-panel">
+        <h2>Average work pace <span>min/{{ prefs.distance_unit }} &middot; faster is higher</span></h2>
+        {% with chart=pace_chart, chart_title='Average work pace', chart_description='Weighted work pace over time, faster pace higher.', chart_unit='/' ~ prefs.distance_unit %}
+        {% include 'chart.html' %}
+        {% endwith %}
+    </section>
+    <section class="stats-panel">
+        <h2>Total work distance <span>{{ prefs.distance_unit }}</span></h2>
+        {% with chart=distance_chart, chart_title='Total work distance', chart_description='Distance covered during work intervals over time.', chart_unit=prefs.distance_unit %}
+        {% include 'chart.html' %}
+        {% endwith %}
+    </section>
+    <p class="stats-explanation">Pace = total work time / total work distance, not an average of session paces.
+        Faded points/bars mark ongoing periods or partial calendar months. Missing data creates gaps.</p>
+    <section class="stats-panel stats-table-scroll">
+        <table class="stats-table">
+            <caption>SubT work summary &mdash; newest first</caption>
+            <thead><tr><th scope="col">Period / sessions</th><th scope="col">Runs</th><th scope="col">Work time</th><th scope="col">Work {{ prefs.distance_unit }}</th><th scope="col">Pace /{{ prefs.distance_unit }}</th></tr></thead>
+            <tbody>
+            {% for period in data.periods|reverse %}
+            <tr class="{{ 'stats-current' if period.ongoing else '' }}">
+                <td>
+                    {% if period.sessions %}
+                    <details>
+                        <summary>{{ period.label }}
+                            {% if period.ongoing %}<span class="stats-badge">ongoing</span>{% endif %}
+                            {% if period.partial %}<span class="stats-badge">partial range</span>{% endif %}
+                            {% if not period.complete %}<span class="stats-badge stats-warning">incomplete</span>{% endif %}
+                        </summary>
+                        <ul class="stats-sessions">
+                        {% for session in period.sessions %}
+                            <li>
+                                <a href="https://intervals.icu/activities/{{ session.id }}" target="_blank" rel="noopener noreferrer">{{ session.start_date_local[:10] }} &middot; {{ session.display_name }}</a>
+                                {% if session.pace is not none %}
+                                <span>{{ format_duration(session.work_interval_time) }} &middot; {{ "%.2f"|format(session.work_interval_distance / prefs.unit_divisor) }} {{ prefs.distance_unit }} &middot; {{ format_work_pace(session.pace) }}/{{ prefs.distance_unit }}</span>
+                                {% else %}
+                                <span class="stats-warning">Work metrics unavailable: {{ session.work_metrics_error or 'pending backfill' }}</span>
+                                {% endif %}
+                            </li>
+                        {% endfor %}
+                        </ul>
+                    </details>
+                    {% else %}
+                    {{ period.label }}{% if period.ongoing %} <span class="stats-badge">ongoing</span>{% endif %}
+                    {% if period.partial %}<span class="stats-badge">partial range</span>{% endif %}
+                    {% endif %}
+                </td>
+                <td>{{ period.session_count }}</td>
+                <td>{{ format_duration(period.work_time) }}{% if not period.complete %}*{% endif %}</td>
+                <td>{{ "%.2f"|format(period.work_distance) }}{% if not period.complete %}*{% endif %}</td>
+                <td>{{ format_work_pace(period.pace) }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <p class="stats-explanation">* Known subtotal only; one or more sessions have unavailable work metrics.
+        Races, easy runs, warm-up, recovery, and cool-down are excluded.</p>
+</main>
+<script>
+// [AI-GENERATED] Keep pace and distance timelines aligned while scrolling.
+const charts = Array.from(document.querySelectorAll('.chart-scroll'));
+charts.forEach(chart => chart.addEventListener('scroll', () => {
+    charts.forEach(other => {
+        if (other !== chart && other.scrollLeft !== chart.scrollLeft) other.scrollLeft = chart.scrollLeft;
+    });
+}));
+</script>
+{% endblock %}
