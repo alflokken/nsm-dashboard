@@ -12,10 +12,16 @@ Built with Claude Opus 4.6.
 
 ### Docker (recommended)
 
+Run these commands from the project directory:
+
 ```bash
 cp config.example.json config.json   # Edit with your API key
 docker compose up -d
 ```
+
+### Corporate network / TLS-inspecting proxy
+
+If sync fails with `SSLCertVerificationError` behind a corporate TLS-inspecting proxy, add the CA certificate(s) to `certs/` as PEM-encoded `.crt` files, one certificate per file. Set ENV-variable `NSM_DOCKERFILE=Dockerfile.custom-ca` and rebuild and restart the container. Certificates in `certs/` are gitignored; TLS certificate and hostname verification remain enabled.
 
 ### Without Docker
 
@@ -108,10 +114,13 @@ NSM/
 ├── config.example.json # Configuration template
 ├── schema.sql          # Database schema
 ├── requirements.txt    # Python dependencies
-├── Dockerfile
+├── Dockerfile          # Regular image (default)
+├── Dockerfile.enterprise # Corporate proxy CA support
 ├── docker-compose.yml
 ├── .gitignore
 ├── .dockerignore
+├── certs/              # Local corporate CA certificates (gitignored)
+│   └── .gitkeep
 ├── templates/
 │   └── index.html      # UI template (Jinja2 + Bootstrap 5)
 ├── static/
