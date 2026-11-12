@@ -424,3 +424,158 @@ body {
     border-color: #3d4149;
 }
 
+/* Navigation */
+.page-nav {
+    display: flex;
+    gap: 0.6rem;
+    font-size: 0.72rem;
+}
+
+.page-nav a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.page-nav a[aria-current="page"] {
+    color: var(--color-current-accent);
+    font-weight: 700;
+}
+
+/* Stats page */
+.stats-content {
+    padding: 0.75rem;
+}
+
+.stats-heading {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.stats-heading h1 {
+    font-size: 1.1rem;
+    margin: 0 0 0.2rem;
+}
+
+.stats-heading p,
+.stats-explanation {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.stats-filters {
+    display: flex;
+    gap: 0.75rem;
+}
+
+.stats-filters label {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.stats-filters select {
+    display: block;
+    padding: 0.25rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    background: #fff;
+    color: var(--text-primary);
+}
+
+.stats-panel {
+    margin: 0.75rem 0;
+    padding: 0.75rem;
+    background: #fff;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.stats-panel h2 {
+    font-size: 0.85rem;
+    margin: 0 0 0.4rem;
+}
+
+.stats-panel h2 span {
+    font-size: 0.65rem;
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.stats-notice {
+    margin: 0.5rem 0;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    background: var(--color-empty);
+    border-left: 3px solid var(--color-current-accent);
+}
+
+.chart-scroll,
+.stats-table-scroll {
+    overflow-x: auto;
+}
+
+.stats-chart {
+    display: block;
+    width: 100%;
+}
+
+.chart-grid { stroke: var(--color-border); }
+.chart-label { fill: var(--text-secondary); font-size: 11px; }
+.chart-line { stroke: var(--color-current-accent); stroke-width: 2; }
+.chart-point { fill: var(--color-current-accent); }
+.chart-bar { fill: var(--color-interval); }
+.chart-faded { opacity: 0.45; }
+
+.stats-table {
+    width: 100%;
+    font-size: 0.75rem;
+}
+
+.stats-table th,
+.stats-table td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+}
+
+.stats-table th:not(:first-child),
+.stats-table td:not(:first-child) {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.stats-badge {
+    margin-left: 0.35rem;
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+}
+
+.stats-warning {
+    color: var(--color-interval);
+}
+
+.stats-empty summary {
+    list-style: none;
+    cursor: default;
+}
+
+.stats-sessions {
+    margin: 0.5rem 0 0;
+    padding-left: 1rem;
+}
+
+.stats-sessions a {
+    color: var(--color-current-accent);
+}
+
+.stats-sessions span {
+    display: block;
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .stats-panel,
+[data-theme="dark"] .stats-filters select {
+    background: #1a1d21;
+}
+

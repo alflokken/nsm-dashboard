@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}SubT Stats{% endblock %}
+{% block content %}
+<main class="stats-content">
+    <div class="stats-heading">
+        <div>
+            <h1>SubT progress</h1>
+            <p>Work intervals only; warm-up, recoveries, cool-down and other runs are excluded.</p>
+        </div>
+        <form class="stats-filters" method="get" action="{{ url_for('stats_page') }}">
+            <label>Range
+                <select name="weeks" onchange="this.form.submit()">
+                    {% for value, text in [('12', '12 weeks'), ('26', '26 weeks'), ('52', '52 weeks'), ('all', 'All history')] %}
+                    <option value="{{ value }}"{% if weeks == value %} selected{% endif %}>{{ text }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label>Group by
+                <select name="grouping" onchange="this.form.submit()">
+                    <option value="weekly"{% if grouping == 'weekly' %} selected{% endif %}>Week</option>
+                    <option value="monthly"{% if grouping == 'monthly' %} selected{% endif %}>Month</option>
+                </select>
+            </label>
+        </form>
+    </div>
+
+    {% if pending %}
+    <div class="stats-notice">
+        {{ pending }} SubT session{{ 's' if pending != 1 }} without work data yet. Click Sync to fetch it;
+        periods containing them are left out of the charts.
+    </div>
+    {% endif %}
+
+    <section class="stats-panel">
+        <h2>Average work pace <span>min/{{ prefs.distance_unit }}, faster is higher</span></h2>
+        {% with chart=pace_chart, title='Average work pace', line=true, unit='/' ~ prefs.distance_unit %}
+        {% include 'chart.html' %}
+        {% endwith %}
+    </section>
+    <section class="stats-panel">
+        <h2>Work distance <span>{{ prefs.distance_unit }}</span></h2>
+        {% with chart=distance_chart, title='Work distance', line=false, unit=' ' ~ prefs.distance_unit %}
+        {% include 'chart.html' %}
+        {% endwith %}
+    </section>
+
+    <section class="stats-panel stats-table-scroll">
+        <table class="stats-table">
+            <thead>
+                <tr>
+                    <th>Period</th>
+                    <th>Runs</th>
+                    <th>Work time</th>
+                    <th>Work {{ prefs.distance_unit }}</th>
+                    <th>Pace /{{ prefs.distance_unit }}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for period in periods|reverse %}
+                <tr>
+                    <td>
+                        <details{% if not period.sessions %} class="stats-empty"{% endif %}>
+                            <summary>
+                                {{ period.label }}
+                                {% if period.ongoing %}<span class="stats-badge">ongoing</span>{% endif %}
+                                {% if period.missing %}<span class="stats-badge stats-warning">incomplete</span>{% endif %}
+                            </summary>
+                            {% if period.sessions %}
+                            <ul class="stats-sessions">
+                                {% for s in period.sessions %}
+                                <li>
+                                    <a href="https://intervals.icu/activities/{{ s.id }}" target="_blank" rel="noopener">{{ s.start_date_local[:10] }} &middot; {{ s.display_name }}</a>
+                                    {% if s.pace %}
+                                    <span>{{ format_duration(s.work_interval_time) }} &middot; {{ "%.2f" | format(s.work_interval_distance / prefs.unit_divisor) }}{{ prefs.distance_unit }} &middot; {{ format_pace(s.pace) }}/{{ prefs.distance_unit }}</span>
+                                    {% else %}
+                                    <span class="stats-warning">no work data yet</span>
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </details>
+                    </td>
+                    <td>{{ period.sessions|length }}</td>
+                    <td>{{ format_duration(period.work_time) }}</td>
+                    <td>{{ "%.2f" | format(period.work_distance) }}</td>
+                    <td>{{ format_pace(period.pace) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <p class="stats-explanation">
+        Pace is total work time divided by total work distance, not an average of session paces.
+        Faded points mark the period in progress. Incomplete periods show known totals only.
+    </p>
+</main>
+{% endblock %}

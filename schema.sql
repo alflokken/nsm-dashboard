@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS activities (
     work_interval_time INTEGER DEFAULT 0,
     interval_count INTEGER DEFAULT 0,
     interval_avg_duration INTEGER DEFAULT 0,
+    work_interval_distance REAL,
     synced_at TEXT NOT NULL
 );
 

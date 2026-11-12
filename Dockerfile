@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tzdata \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py sync.py classify.py formatting.py schema.sql ./
+COPY *.py schema.sql ./
 COPY templates/ templates/
 COPY static/ static/
 

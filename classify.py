@@ -5,6 +5,24 @@
 MIN_RECOVERY_SECS = 15
 
 
+def work_totals(intervals: list[dict], groups: list[dict]) -> tuple[int, float]:
+    """Sum time (seconds) and distance (metres) of the repeated WORK intervals.
+
+    Warm-up, cool-down and recoveries are excluded. Raises ValueError if no
+    work interval has both time and distance.
+    """
+    repeated = {g["id"] for g in groups if g.get("count", 1) >= 2}
+    work = [
+        i for i in intervals
+        if i.get("type") == "WORK" and i.get("group_id") in repeated
+    ]
+    seconds = sum(i.get("moving_time") or 0 for i in work)
+    metres = sum(i.get("distance") or 0 for i in work)
+    if seconds <= 0 or metres <= 0:
+        raise ValueError("no work intervals with time and distance")
+    return seconds, metres
+
+
 def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
     """Classify an activity based on its interval groups and duration.
 
@@ -22,6 +40,7 @@ def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
             "classification": "race",
             "display_name": "Race",
             "work_interval_time": 0,
+            "work_interval_distance": 0,
             "interval_count": 0,
             "interval_avg_duration": 0,
         }
@@ -47,11 +66,12 @@ def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
         count = rep_group["count"]
         avg_duration_secs = rep_group.get("moving_time", 0) or 0
         avg_duration_mins = round(avg_duration_secs / 60)
-        total_work_secs = count * avg_duration_secs
+        work_secs, work_metres = work_totals(intervals, groups)
         return {
             "classification": "interval",
             "display_name": f"SubT-{count}x{avg_duration_mins}",
-            "work_interval_time": total_work_secs,
+            "work_interval_time": work_secs,
+            "work_interval_distance": work_metres,
             "interval_count": count,
             "interval_avg_duration": round(avg_duration_secs),
         }
@@ -64,6 +84,7 @@ def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
             "classification": "long",
             "display_name": f"Long-{round(moving_time_mins)}",
             "work_interval_time": 0,
+            "work_interval_distance": 0,
             "interval_count": 0,
             "interval_avg_duration": 0,
         }
@@ -72,6 +93,7 @@ def classify(activity: dict, intervals: list[dict], groups: list[dict]) -> dict:
         "classification": "easy",
         "display_name": f"Easy-{round(moving_time_mins)}",
         "work_interval_time": 0,
+        "work_interval_distance": 0,
         "interval_count": 0,
         "interval_avg_duration": 0,
     }

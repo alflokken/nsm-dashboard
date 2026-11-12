@@ -11,7 +11,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import Flask, g, render_template, jsonify, request
 
 from sync import sync_activities, refresh_prefs
-from formatting import date_format_to_strftime, time_format_to_strftime, is_imperial_measurement
+from formatting import (
+    date_format_to_strftime, time_format_to_strftime, is_imperial_measurement,
+    format_duration, format_pace_seconds,
+)
+from stats import aggregate_stats, chart_geometry
 
 BASE_DIR = Path(__file__).parent
 CONFIG_PATH = BASE_DIR / "config.json"
@@ -48,6 +52,11 @@ _sync_lock = threading.Lock()
 _init_db = sqlite3.connect(str(_DB_PATH))
 with open(SCHEMA_PATH) as f:
     _init_db.executescript(f.read())
+# Databases created before work distance was tracked keep their old table
+# (CREATE TABLE IF NOT EXISTS), so add the column. The next sync fills it in.
+if "work_interval_distance" not in {r[1] for r in _init_db.execute("PRAGMA table_info(activities)")}:
+    _init_db.execute("ALTER TABLE activities ADD COLUMN work_interval_distance REAL")
+_init_db.commit()
 _init_db.close()
 
 
@@ -177,19 +186,8 @@ def current_iso_week(tz):
     return (iso[0], iso[1])
 
 
-@app.route("/")
-def index():
-    """Main page: weekly training grid."""
-    num_weeks = request.args.get("weeks", 20, type=int)
-    num_weeks = max(1, min(num_weeks, 500))
-
-    db = get_db()
-    prefs = get_prefs(db)
-    g.prefs = prefs
-    tz = _resolve_zone(prefs)
-    weeks, total_weeks = get_weeks_data(db, num_weeks, prefs["unit_divisor"])
-
-    # Get last sync timestamp, converted to the athlete's timezone
+def get_sync_status(db, prefs, tz):
+    """Last sync time (athlete timezone) and whether a background refresh is due."""
     row = db.execute("SELECT value FROM sync_state WHERE key = 'last_sync_time'").fetchone()
     last_sync = None
     last_sync_dt = None
@@ -209,6 +207,20 @@ def index():
         stale = True
     else:
         stale = datetime.now(timezone.utc) - last_sync_dt > timedelta(minutes=stale_minutes)
+    return {"last_sync": last_sync, "stale": stale, "stale_minutes": stale_minutes}
+
+
+@app.route("/")
+def index():
+    """Main page: weekly training grid."""
+    num_weeks = request.args.get("weeks", 20, type=int)
+    num_weeks = max(1, min(num_weeks, 500))
+
+    db = get_db()
+    prefs = get_prefs(db)
+    g.prefs = prefs
+    tz = _resolve_zone(prefs)
+    weeks, total_weeks = get_weeks_data(db, num_weeks, prefs["unit_divisor"])
 
     return render_template(
         "index.html",
@@ -216,13 +228,50 @@ def index():
         current_week=current_iso_week(tz),
         today_weekday=datetime.now(tz).isocalendar()[2] - 1,
         format_pace=format_pace,
-        last_sync=last_sync,
-        stale=stale,
-        stale_minutes=stale_minutes,
         shown_weeks=num_weeks,
         total_weeks=total_weeks,
         has_more=num_weeks < total_weeks,
         prefs=prefs,
+        **get_sync_status(db, prefs, tz),
+    )
+
+
+STATS_RANGES = {"12": 12, "26": 26, "52": 52, "all": None}  # weeks back; None = all history
+
+
+@app.route("/stats")
+def stats_page():
+    """SubT progress: work-interval pace and distance per week or month."""
+    weeks = request.args.get("weeks", "12")
+    if weeks not in STATS_RANGES:
+        weeks = "12"
+    grouping = request.args.get("grouping", "weekly")
+    if grouping not in ("weekly", "monthly"):
+        grouping = "weekly"
+
+    db = get_db()
+    prefs = get_prefs(db)
+    g.prefs = prefs
+    tz = _resolve_zone(prefs)
+    rows = [dict(r) for r in db.execute(
+        "SELECT * FROM activities WHERE classification = 'interval' ORDER BY start_date_local"
+    )]
+    periods = aggregate_stats(
+        rows, datetime.now(tz).date(), STATS_RANGES[weeks], grouping, prefs["unit_divisor"]
+    )
+
+    return render_template(
+        "stats.html",
+        periods=periods,
+        pace_chart=chart_geometry(periods, "pace"),
+        distance_chart=chart_geometry(periods, "work_distance"),
+        pending=sum(1 for r in rows if not r["work_interval_distance"]),
+        weeks=weeks,
+        grouping=grouping,
+        format_duration=format_duration,
+        format_pace=format_pace_seconds,
+        prefs=prefs,
+        **get_sync_status(db, prefs, tz),
     )
 
 
