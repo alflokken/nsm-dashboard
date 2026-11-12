@@ -239,6 +239,14 @@ def index():
 STATS_RANGES = {"12": 12, "26": 26, "52": 52, "all": None}  # weeks back; None = all history
 
 
+def get_stats_exclude_types():
+    """Activity types left out of the Stats page (default: treadmill/virtual runs)."""
+    types = CONFIG.get("stats_exclude_activity_types", ["VirtualRun"])
+    if isinstance(types, str):
+        types = [types]
+    return tuple(types or ())
+
+
 @app.route("/stats")
 def stats_page():
     """SubT progress: work-interval pace and distance per week or month."""
@@ -256,16 +264,21 @@ def stats_page():
     rows = [dict(r) for r in db.execute(
         "SELECT * FROM activities WHERE classification = 'interval' ORDER BY start_date_local"
     )]
+    exclude_types = get_stats_exclude_types()
     periods = aggregate_stats(
-        rows, datetime.now(tz).date(), STATS_RANGES[weeks], grouping, prefs["unit_divisor"]
+        rows, datetime.now(tz).date(), STATS_RANGES[weeks], grouping, prefs["unit_divisor"],
+        exclude_types,
     )
+    counted = [r for r in rows if r["type"] not in exclude_types]
 
     return render_template(
         "stats.html",
         periods=periods,
         pace_chart=chart_geometry(periods, "pace"),
         distance_chart=chart_geometry(periods, "work_distance"),
-        pending=sum(1 for r in rows if not r["work_interval_distance"]),
+        pending=sum(1 for r in counted if not r["work_interval_distance"]),
+        excluded=len(rows) - len(counted),
+        exclude_types=exclude_types,
         weeks=weeks,
         grouping=grouping,
         format_duration=format_duration,

@@ -31,8 +31,15 @@
     </div>
     {% endif %}
 
+    {% if excluded %}
+    <div class="stats-notice">
+        {{ excluded }} SubT session{{ 's' if excluded != 1 }} of type {{ exclude_types|join(', ') }}
+        (e.g. treadmill) excluded from these stats.
+    </div>
+    {% endif %}
+
     <section class="stats-panel">
-        <h2>Average work pace <span>min/{{ prefs.distance_unit }}, faster is higher</span></h2>
+        <h2>Average work pace  <span>min/{{ prefs.distance_unit }}, faster is higher</span></h2>
         {% with chart=pace_chart, title='Average work pace', line=true, unit='/' ~ prefs.distance_unit %}
         {% include 'chart.html' %}
         {% endwith %}

@@ -2,6 +2,7 @@
   "api_key": "YOUR_INTERVALS_ICU_API_KEY",
   "athlete_id": "0",
   "activity_types": ["Run", "TrailRun", "VirtualRun"],
+  "stats_exclude_activity_types": ["VirtualRun"],
   "weeks_initial_sync": 12,
   "sync_stale_minutes": 60,
   "port": 5000,

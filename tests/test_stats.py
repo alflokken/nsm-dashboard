@@ -33,9 +33,10 @@ GROUPS = [
 ]
 
 
-def session(day, seconds=1800, metres=6410, classification="interval"):
+def session(day, seconds=1800, metres=6410, classification="interval", type="Run"):
     return {
         "id": day, "start_date_local": day + "T10:00:00", "classification": classification,
+        "type": type,
         "work_interval_time": seconds, "work_interval_distance": metres,
     }
 
@@ -78,6 +79,19 @@ class AggregateTests(unittest.TestCase):
     def test_other_classifications_are_ignored(self):
         rows = [session("2026-10-26"), session("2026-10-27", classification="race")]
         self.assertEqual(len(aggregate_stats(rows, self.today)[-1]["sessions"]), 1)
+
+    def test_excluded_types_do_not_skew_totals_or_pace(self):
+        rows = [session("2026-10-26", 1800, 6000), session("2026-10-27", 1800, 5000, type="VirtualRun")]
+        week = aggregate_stats(rows, self.today, exclude_types=("VirtualRun",))[-1]
+        self.assertEqual(len(week["sessions"]), 1)
+        self.assertAlmostEqual(week["pace"], 1800 / 6)
+        both = aggregate_stats(rows, self.today)[-1]
+        self.assertEqual(len(both["sessions"]), 2)
+
+    def test_period_with_only_excluded_sessions_is_empty(self):
+        rows = [session("2026-10-27", type="VirtualRun")]
+        week = aggregate_stats(rows, self.today, exclude_types=("VirtualRun",))[-1]
+        self.assertEqual((week["sessions"], week["work_distance"], week["pace"]), ([], 0, None))
 
     def test_empty_weeks_and_year_boundary(self):
         periods = aggregate_stats([session("2025-12-29")], date(2026, 1, 11))

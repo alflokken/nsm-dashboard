@@ -48,6 +48,7 @@ Edit `config.json`:
 | `api_key` | Your Intervals.icu API key, found under Settings → Developer | Required |
 | `athlete_id` | Athlete ID — `0` resolves to the API key owner | `"0"` |
 | `activity_types` | Activity types to include | `["Run", "TrailRun", "VirtualRun"]` |
+| `stats_exclude_activity_types` | Activity types left out of the Stats page only (treadmill pace is unreliable). Use `[]` to include everything | `["VirtualRun"]` |
 | `weeks_initial_sync` | Number of weeks of history to fetch on the first run | `12` (3 months) |
 | `sync_stale_minutes` | Auto-refresh when the page is opened and the last sync is older than this | `60` |
 | `port` | Local server port | `5000` |
@@ -113,7 +114,7 @@ Weekly totals show an E/T split:
 
 Open **Stats** in the header (`/stats`). It reads only from the local database.
 
-- **What is counted:** Only the repeated `WORK` intervals of interval sessions. Warm-up, recoveries, cool-down, races, easy runs and long runs are excluded; all interval formats (3x10, 5x6, ...) are combined.
+- **What is counted:** Only the repeated `WORK` intervals of interval sessions. Warm-up, recoveries, cool-down, races, easy runs and long runs are excluded; all interval formats (3x10, 5x6, ...) are combined. Sessions whose activity type is in `stats_exclude_activity_types` (by default `VirtualRun`, i.e. treadmill) are excluded from totals, pace and session lists, and a notice shows how many; the weekly training grid still includes them.
 - **Pace:** Total work time divided by total work distance. It is never an average of session or weekly paces, so a longer set weighs more. It is rounded to the nearest second.
 - **Charts:** Work pace (line, faster is higher) and work distance (bars) per week or month, with a table underneath. Expand a period to see its sessions.
 - **Range and grouping:** The last 12, 26 or 52 weeks, or all stored history, grouped by ISO week or calendar month (monthly view starts at the month containing the range start).
@@ -153,10 +154,19 @@ NSM/
     └── nsm.db          # SQLite database (auto-created, gitignored)
 ```
 
+## Design Principles
+
+Simplicity trumps complexity. These guardrails keep the project easy to run and read:
+
+- **Simplicity first** - Prefer the plainest solution that works; avoid abstractions, indirection and cleverness until clearly needed.
+- **Minimal dependencies** - Only `flask` and `requests` (plus `tzdata`). Don't add a dependency, framework, build step or service without a strong, specific reason.
+- **Simple stack** - Python + Flask + SQLite + Jinja2 + server-side SVG. No ORM, no frontend framework, no client-side SPA - render on the server.
+- **Migrate in place** - Schema changes stay backward compatible (`CREATE TABLE IF NOT EXISTS` plus a guarded `ALTER TABLE` at startup) so existing `nsm.db` files keep working.
+
 ## Contributing
 
 This is a personal tool shared publicly. Contributions are welcome, with realistic expectations:
 
 - **Bugs** - Addressed based on severity and personal availability
 - **Pull requests** - Please open an issue first to discuss it before submitting a pull request.
-- **Feature requests** - May not align with my needs. Fork and customize as needed.
+- **Feature requests** - Welcome, but may not align with how I use the tool. Forking to make it your own is encouraged.

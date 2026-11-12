@@ -24,7 +24,7 @@ def _label(start, grouping):
     return f"{year}-W{week:02d}"
 
 
-def aggregate_stats(rows, today, weeks=12, grouping="weekly", divisor=1000):
+def aggregate_stats(rows, today, weeks=12, grouping="weekly", divisor=1000, exclude_types=()):
     """Total work-only time/distance per period, oldest first.
 
     rows: activity dicts. weeks: how many calendar weeks back, or None for all
@@ -32,8 +32,13 @@ def aggregate_stats(rows, today, weeks=12, grouping="weekly", divisor=1000):
     the range start. Pace is total work time / total work distance (seconds per
     km or mile), never an average of session paces. Interval sessions without
     work metrics yet count as `missing`, and make that period's pace unknown.
+    Activities whose `type` is in exclude_types (e.g. treadmill "VirtualRun",
+    whose pace is unreliable) are left out entirely.
     """
-    sessions = [r for r in rows if r["classification"] == "interval"]
+    sessions = [
+        r for r in rows
+        if r["classification"] == "interval" and r.get("type") not in exclude_types
+    ]
     if weeks is None:
         first = min(
             (date.fromisoformat(r["start_date_local"][:10]) for r in sessions),
