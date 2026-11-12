@@ -1,14 +1,22 @@
 # NSM - Norwegian Singles Method Running Tracker
 
-A minimal, self-maintaining local web application that replaces an Excel spreadsheet for tracking the Norwegian Singles running program.
+**NSM** is a self-hosted dashboard for the Norwegian Singles Method. It pulls your runs from [Intervals.icu](https://intervals.icu), automatically sorts them into easy, long, sub-threshold (SubT) interval and race sessions, and shows your weekly training grid and threshold pace trend. Everything runs locally from a single SQLite file.
 
-The app syncs automatically with [Intervals.icu](https://intervals.icu), classifies workouts, and displays a weekly training grid. A **Stats** page charts your SubT progress: work-interval pace and distance per week or month.
+**Features**
 
-![screenshot](img/sample.png)
+- Weekly training grid with an easy/threshold (E/T) split
+- Automatic workout classification from interval data
+- Stats page: SubT work pace and distance per week or month, with collapsible panels
+- Auto-refresh, dark mode, metric or imperial units from your Intervals.icu profile
 
-![stats screenshot](img/stats.png)
+![Weekly training grid](img/sample.png)
 
-Built with Claude Opus 4.6.
+<details>
+<summary>Stats page</summary>
+
+![SubT stats: work pace and distance per week](img/stats.png)
+
+</details>
 
 ## Quick Start
 
@@ -21,9 +29,12 @@ cp config.example.json config.json   # Edit with your API key
 docker compose up -d
 ```
 
-### Corporate network / TLS-inspecting proxy
+<details>
+<summary>Sync fails with <code>SSLCertVerificationError</code> (corporate proxy)?</summary>
 
-If sync fails with `SSLCertVerificationError` behind a corporate TLS-inspecting proxy, add the CA certificate(s) to `certs/` as PEM-encoded `.crt` files, one certificate per file. Set ENV-variable `NSM_DOCKERFILE=Dockerfile.custom-ca` and rebuild and restart the container. Certificates in `certs/` are gitignored; TLS certificate and hostname verification remain enabled.
+Behind a TLS-inspecting proxy, put your CA certificate(s) in `certs/` as PEM `.crt` files, one per file, then rebuild and restart with `NSM_DOCKERFILE=Dockerfile.custom-ca`. Certificates are gitignored and certificate verification stays enabled.
+
+</details>
 
 ### Without Docker
 
@@ -116,7 +127,7 @@ Open **Stats** in the header (`/stats`). It reads only from the local database.
 
 - **What is counted:** Only the repeated `WORK` intervals of interval sessions. Warm-up, recoveries, cool-down, races, easy runs and long runs are excluded; all interval formats (3x10, 5x6, ...) are combined. Sessions whose activity type is in `stats_exclude_activity_types` (by default `VirtualRun`, i.e. treadmill) are excluded from totals, pace and session lists, and a notice shows how many; the weekly training grid still includes them.
 - **Pace:** Total work time divided by total work distance. It is never an average of session or weekly paces, so a longer set weighs more. It is rounded to the nearest second.
-- **Charts:** Work pace (line, faster is higher) and work distance (bars) per week or month, with a table underneath. Expand a period to see its sessions.
+- **Charts:** Work pace (line, faster is higher) and work distance (bars) per week or month, with a table underneath. Expand a period to see its sessions. Each panel can be collapsed by clicking its heading; the choice is remembered in the browser, and the work-distance panel starts collapsed.
 - **Range and grouping:** The last 12, 26 or 52 weeks, or all stored history, grouped by ISO week or calendar month (monthly view starts at the month containing the range start).
 - **Gaps:** A period without SubT shows zero work and no pace. The current period is faded. If an interval session has no work data yet, its period shows an *incomplete* badge, known totals only, and is left out of the charts until a sync fills it in.
 - Charts are inline SVG generated on the server, so there are no extra dependencies.
@@ -135,8 +146,9 @@ NSM/
 ├── schema.sql          # Database schema
 ├── requirements.txt    # Python dependencies
 ├── Dockerfile          # Regular image (default)
-├── Dockerfile.enterprise # Corporate proxy CA support
+├── Dockerfile.custom-ca # Corporate proxy CA support
 ├── docker-compose.yml
+├── LICENSE
 ├── .gitignore
 ├── .dockerignore
 ├── certs/              # Local corporate CA certificates (gitignored)
@@ -149,7 +161,7 @@ NSM/
 ├── static/
 │   └── style.css       # Custom styles
 ├── tests/
-│   └── test_stats.py   # Unit tests (python -m unittest)
+│   └── test_stats.py   # Unit tests (python -m unittest discover -s tests -t tests)
 └── data/
     └── nsm.db          # SQLite database (auto-created, gitignored)
 ```
@@ -170,3 +182,7 @@ This is a personal tool shared publicly. Contributions are welcome, with realist
 - **Bugs** - Addressed based on severity and personal availability
 - **Pull requests** - Please open an issue first to discuss it before submitting a pull request.
 - **Feature requests** - Welcome, but may not align with how I use the tool. Forking to make it your own is encouraged.
+
+## License
+
+[MIT](LICENSE). Built with Claude.
