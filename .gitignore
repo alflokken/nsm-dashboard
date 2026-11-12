@@ -3,3 +3,5 @@ nsm.db
 __pycache__/
 *.pyc
 .venv/
+certs/*
+!certs/.gitkeep
