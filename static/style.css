@@ -491,9 +491,35 @@ body {
     border-radius: 8px;
 }
 
+.stats-panel > summary {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.stats-panel > summary::-webkit-details-marker {
+    display: none;
+}
+
+.stats-panel > summary::before {
+    content: "\25B8";
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.stats-panel[open] > summary::before {
+    content: "\25BE";
+}
+
 .stats-panel h2 {
     font-size: 0.85rem;
-    margin: 0 0 0.4rem;
+    margin: 0;
+}
+
+.stats-panel[open] > summary {
+    margin-bottom: 0.4rem;
 }
 
 .stats-panel h2 span {

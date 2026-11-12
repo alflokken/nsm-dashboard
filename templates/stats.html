@@ -38,20 +38,22 @@
     </div>
     {% endif %}
 
-    <section class="stats-panel">
-        <h2>Average work pace  <span>min/{{ prefs.distance_unit }}, faster is higher</span></h2>
+    <details class="stats-panel" data-panel="pace" open>
+        <summary><h2>Average work pace <span>min/{{ prefs.distance_unit }}, faster is higher</span></h2></summary>
         {% with chart=pace_chart, title='Average work pace', line=true, unit='/' ~ prefs.distance_unit %}
         {% include 'chart.html' %}
         {% endwith %}
-    </section>
-    <section class="stats-panel">
-        <h2>Work distance <span>{{ prefs.distance_unit }}</span></h2>
+    </details>
+    <details class="stats-panel" data-panel="distance">
+        <summary><h2>Work distance <span>{{ prefs.distance_unit }}</span></h2></summary>
         {% with chart=distance_chart, title='Work distance', line=false, unit=' ' ~ prefs.distance_unit %}
         {% include 'chart.html' %}
         {% endwith %}
-    </section>
+    </details>
 
-    <section class="stats-panel stats-table-scroll">
+    <details class="stats-panel" data-panel="table" open>
+        <summary><h2>Periods <span>work totals per {{ 'month' if grouping == 'monthly' else 'week' }}</span></h2></summary>
+        <div class="stats-table-scroll">
         <table class="stats-table">
             <thead>
                 <tr>
@@ -96,7 +98,22 @@
                 {% endfor %}
             </tbody>
         </table>
-    </section>
+        </div>
+    </details>
+    <script>
+    // Remember which panels are collapsed; the distance panel starts collapsed.
+    (function() {
+        document.querySelectorAll('details.stats-panel[data-panel]').forEach(function(panel) {
+            var key = 'nsm-panel-' + panel.dataset.panel;
+            var saved = null;
+            try { saved = localStorage.getItem(key); } catch (e) {}
+            if (saved) panel.open = saved === 'open';
+            panel.addEventListener('toggle', function() {
+                try { localStorage.setItem(key, panel.open ? 'open' : 'closed'); } catch (e) {}
+            });
+        });
+    })();
+    </script>
     <p class="stats-explanation">
         Pace is total work time divided by total work distance, not an average of session paces.
         Faded points mark the period in progress. Incomplete periods show known totals only.
